@@ -204,7 +204,7 @@ local destructionHooks = {}
 
             game:GetService("StarterGui"):SetCore("SendNotification", {
                 Title = "Minimized",
-                Text = "KeyBind : LeftAlt",
+                Text = "KeyBind: RightAlt",
                 Duration = 1
             })
         end)

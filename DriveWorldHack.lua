@@ -1,4 +1,4 @@
---[[no longer obfuscated fully open source]] --
+--[[Protected by IDK level: MAX]] --
 local ok, lib = pcall(loadstring(game:HttpGet(
     "https://raw.githubusercontent.com/vthiep2412/hiep-script/refs/heads/main/OsmiumLibraryFix.lua")));
 local win = lib:CreateWindow("Drive World Hack - Keybind: RightAlt");
@@ -14,6 +14,24 @@ local unused2 = false;
 local defaultGravity = game:GetService("Workspace").Gravity;
 local farmSpeed = 1;
 local dashPower = 0.005;
+
+function dash(dashPower, dirhehe)
+    local player = game:GetService("Players").LocalPlayer;
+    local char = player.Character or player.CharacterAdded:Wait();
+    if (char and char:FindFirstChild("Head")) then
+        local velocity = dirhehe * defaultGravity * dashPower;
+        for _, car in pairs(game:GetService("Workspace").Cars:GetChildren()) do
+            if (tostring(car.Owner.Value) == player.Name) then
+                for _, part in pairs(car:GetDescendants()) do
+                    if (part:IsA("BasePart") and not part.Anchored) then
+                        part.Velocity = part.Velocity + velocity;
+                    end
+                end
+            end
+        end
+    end
+end
+
 tabRace:CreateToggle("Speed Dash [keybind: F]", false, function(val)
     speedDash = val;
 end);
@@ -24,18 +42,12 @@ inputService.InputBegan:Connect(function(input, isProcessed)
         pcall(function()
             local player = game:GetService("Players").LocalPlayer;
             local char = player.Character or player.CharacterAdded:Wait();
-            if (char and char:FindFirstChild("Head")) then
-                local head = char.Head;
-                local velocity = head.CFrame.LookVector * defaultGravity * dashPower;
-                for _, part in pairs(game:GetService("Workspace"):GetDescendants()) do
-                    if (part:IsA("BasePart") and not part.Anchored) then
-                        part.Velocity = part.Velocity + velocity;
-                    end
-                end
-            end
+            local head = char.Head;
+            local dirhehe = head.CFrame.LookVector;
+            dash(dashPower, dirhehe);
         end);
     end
-end);
+end)
 tabRace:CreateTextbox("Dash Power [default: 5]", function(val)
     if (val == "") then return end
     if (tonumber(val) == nil) then return end
@@ -45,6 +57,8 @@ tabRace:CreateTextbox("Dash Power [default: 5]", function(val)
     end
     dashPower = tonumber(val) * 0.001;
 end, "Change Dash Power");
+-- Remove duplicate or outdated Flying Farm toggles
+local flyingFarm = false;
 tabFarm:CreateToggle("Flying Farm", false, function(val)
     flyingFarm = val;
     if val then
@@ -163,3 +177,64 @@ end);
 tabCredits:CreateLabel("Made by Hiep");
 tabCredits:CreateLabel("Discord: Hiepvu123");
 tabCredits:CreateLabel("GitHub: https://github.com/vthiep2412/hiep-script");
+local vehicleNoclip = false
+local noclipConnections = {}
+
+tabFarm:CreateToggle("Vehicle Noclip (Beta)", false, function(val)
+    vehicleNoclip = val
+    
+    if val then
+        local conn = game:GetService("RunService").Heartbeat:Connect(function()
+            pcall(function()
+                local player = game:GetService("Players").LocalPlayer
+                local character = player.Character or player.CharacterAdded:Wait()
+                
+                -- Set all collisions off
+                for _, part in pairs(character:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = false
+                    end
+                end
+                
+                for _, car in pairs(game:GetService("Workspace").Cars:GetChildren()) do
+                    if tostring(car.Owner.Value) == player.Name then
+                        for _, part in pairs(car:GetDescendants()) do
+                            if part:IsA("BasePart") then
+                                part.CanCollide = false
+                            end
+                        end
+                    end
+                end
+            end)
+        end)
+        table.insert(noclipConnections, conn)
+    else
+        -- Set all collisions back on
+        pcall(function()
+            local player = game:GetService("Players").LocalPlayer
+            local character = player.Character or player.CharacterAdded:Wait()
+            
+            for _, part in pairs(character:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.CanCollide = true
+                end
+            end
+            
+            for _, car in pairs(game:GetService("Workspace").Cars:GetChildren()) do
+                if tostring(car.Owner.Value) == player.Name then
+                    for _, part in pairs(car:GetDescendants()) do
+                        if part:IsA("BasePart") then
+                            part.CanCollide = true
+                        end
+                    end
+                end
+            end
+        end)
+        
+        -- Cleanup connections
+        for _, conn in pairs(noclipConnections) do
+            conn:Disconnect()
+        end
+        noclipConnections = {}
+    end
+end)

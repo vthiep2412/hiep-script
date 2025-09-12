@@ -1,11 +1,15 @@
---[[Protected by IDK level: MAX]] --
+--[[erm i should make a hanlde to stop execute in other game]] --
 local ok, lib = pcall(loadstring(game:HttpGet(
     "https://raw.githubusercontent.com/vthiep2412/hiep-script/refs/heads/main/OsmiumLibraryFix.lua")));
 local win = lib:CreateWindow("Drive World Hack - Keybind: RightAlt");
+
+--ui setup
 local tabFarm = win:CreateTab("Farm");
 local tabRace = win:CreateTab("Race");
 local tabMisc = win:CreateTab("Misc");
 local tabCredits = win:CreateTab("Credits");
+
+--drop farm and dash var
 local flyingFarm = false;
 local unused1 = false;
 local speedDash = false;
@@ -14,6 +18,54 @@ local unused2 = false;
 local defaultGravity = game:GetService("Workspace").Gravity;
 local farmSpeed = 1;
 local dashPower = 0.005;
+
+--flying around var
+local flyaround = false
+local vehicleFlySpeed = 1200 -- studs/sec
+local pointA = Vector3.new(1800, 550, 0)
+local pointB = Vector3.new(-1800, 450, 0)
+
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+
+local function flyCarTo(car, startPos, endPos, speed)
+    local root = car.PrimaryPart
+    local BG = Instance.new("BodyGyro")
+    local BV = Instance.new("BodyVelocity")
+
+    BG.P = 9e4
+    BG.maxTorque = Vector3.new(9e9, 9e9, 9e9)
+    BG.cframe = CFrame.new(startPos, endPos)
+    BG.Parent = root
+
+    BV.maxForce = Vector3.new(9e9, 9e9, 9e9)
+    BV.Parent = root
+
+    local direction = (endPos - startPos).Unit
+    local distance = (endPos - startPos).Magnitude
+    local travelTime = distance / speed
+    local elapsed = 0
+
+    while elapsed < travelTime do
+        BV.velocity = direction * speed
+        BG.cframe = CFrame.new(root.Position, endPos)
+        elapsed += task.wait()
+    end
+
+    BV:Destroy()
+    BG:Destroy()
+    root.CFrame = CFrame.new(endPos)
+end
+
+local function getCar()
+    for _, car in pairs(workspace.Cars:GetChildren()) do
+        if car:FindFirstChild("Owner") and car.Owner.Value == player then
+            if car.PrimaryPart then
+                return car
+            end
+        end
+    end
+end
 
 function dash(dashPower, dirhehe)
     local player = game:GetService("Players").LocalPlayer;
@@ -88,6 +140,31 @@ tabFarm:CreateTextbox("Farm speed (In seconds, default: 1-2)", function(val)
     end
     farmSpeed = tonumber(val);
 end, "Change Farm Speed");
+
+tabFarm:CreateToggle("Flying around farm", false, function(val)
+    flyaround = val
+    local car = getCar()
+    if not car then
+        warn("Car not found or PrimaryPart not set")
+        return
+    end
+    if val then
+        task.spawn(function()
+            while flyaround do
+                pcall(function()
+                    flyCarTo(car, pointA, pointB, vehicleFlySpeed);
+                    flyCarTo(car, pointB, pointA, vehicleFlySpeed);
+                end)
+            end
+        end)
+    end
+    -- not working script below (commented)
+    -- while val do 
+    --     flyCarTo(car, pointA, pointB, vehicleFlySpeed)
+    --     flyCarTo(car, pointB, pointA, vehicleFlySpeed)
+    -- end
+end)
+
 local antiAFKGui = nil
 function showAntiAFKGui()
     if antiAFKGui and antiAFKGui.Parent == game.CoreGui then return end
@@ -177,6 +254,7 @@ end);
 tabCredits:CreateLabel("Made by Hiep");
 tabCredits:CreateLabel("Discord: Hiepvu123");
 tabCredits:CreateLabel("GitHub: https://github.com/vthiep2412/hiep-script");
+tabCredits:CreateLabel("This script is open source, for everyone to use, not update daily btw")
 local vehicleNoclip = false
 local noclipConnections = {}
 

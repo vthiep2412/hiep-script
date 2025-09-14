@@ -22,11 +22,93 @@ local dashPower = 0.005;
 --flying around var
 local flyaround = false
 local vehicleFlySpeed = 1200 -- studs/sec
-local pointA = Vector3.new(1800, 550, 0)
-local pointB = Vector3.new(-1800, 450, 0)
+local pointA = Vector3.new(4100, 100, -5100)
+local pointB = Vector3.new(4900, 410, -5100)
+local flyaroundTeleportCoord = Vector3.new(4100, 80, -5100) -- <<< CHANGE THIS: Coordinate to teleport to for fly around farm
+local flyaroundDuration = 20 -- Duration in minutes for the fly around cycle
 
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
+
+local dashConnection = nil
+local antiAfkConnection = nil
+
+local function getCar() -- Forward declaration for toggleNoclip
+    for _, car in pairs(workspace.Cars:GetChildren()) do
+        if car:FindFirstChild("Owner") and car.Owner.Value == player then
+            return car
+        end
+    end
+end
+
+local function TptoVector(targetpos)
+    local car = getCar()
+    if not (car and car.PrimaryPart) then
+        warn("Player car not found for GoTo.")
+        return false
+    end
+    local root = car.PrimaryPart
+    local wasAnchored = root.Anchored
+    root.Anchored = true
+    task.wait() -- Wait a moment for anchor to take effect
+    car:SetPrimaryPartCFrame(CFrame.new(targetpos))
+    task.wait(1)
+    root.Anchored = wasAnchored
+end
+
+
+local function toggleNoclip(val)
+    vehicleNoclip = val
+    
+    if val then
+        -- Noclip ON
+        originalCollisions = {} -- Clear any old data
+        
+        local conn = game:GetService("RunService").Heartbeat:Connect(function()
+            pcall(function()
+                local player = game:GetService("Players").LocalPlayer
+                local character = player.Character or player.CharacterAdded:Wait()
+                
+                local function processPart(part)
+                    if part:IsA("BasePart") then
+                        if originalCollisions[part] == nil then
+                            originalCollisions[part] = part.CanCollide
+                        end
+                        part.CanCollide = false
+                    end
+                end
+
+                for _, part in ipairs(character:GetDescendants()) do
+                    processPart(part)
+                end
+                
+                local car = getCar()
+                if car then
+                    for _, part in ipairs(car:GetDescendants()) do
+                        processPart(part)
+                    end
+                end
+            end)
+        end)
+        table.insert(noclipConnections, conn)
+    else
+        -- Noclip OFF
+        for _, conn in ipairs(noclipConnections) do
+            conn:Disconnect()
+        end
+        noclipConnections = {}
+
+        pcall(function()
+            for part, originalState in pairs(originalCollisions) do
+                if part and part.Parent then
+                    part.CanCollide = originalState
+                end
+            end
+        end)
+        
+        originalCollisions = {}
+    end
+end
 
 local function flyCarTo(car, startPos, endPos, speed)
     local root = car.PrimaryPart
@@ -46,7 +128,7 @@ local function flyCarTo(car, startPos, endPos, speed)
     local travelTime = distance / speed
     local elapsed = 0
 
-    while elapsed < travelTime do
+    while elapsed < travelTime and flyaround do
         BV.velocity = direction * speed
         BG.cframe = CFrame.new(root.Position, endPos)
         elapsed += task.wait()
@@ -54,7 +136,9 @@ local function flyCarTo(car, startPos, endPos, speed)
 
     BV:Destroy()
     BG:Destroy()
-    root.CFrame = CFrame.new(endPos)
+    if elapsed >= travelTime then
+        root.CFrame = CFrame.new(endPos)
+    end
 end
 
 local function getCar()
@@ -88,7 +172,7 @@ tabRace:CreateToggle("Speed Dash [keybind: F]", false, function(val)
     speedDash = val;
 end);
 local inputService = game:GetService("UserInputService");
-inputService.InputBegan:Connect(function(input, isProcessed)
+dashConnection = inputService.InputBegan:Connect(function(input, isProcessed)
     if isProcessed then return end
     if (speedDash and (input.KeyCode == dashKey)) then
         pcall(function()
@@ -120,7 +204,7 @@ tabFarm:CreateToggle("Flying Farm", false, function(val)
                     game:GetService("Workspace").Gravity = 500;
                     for _, car in pairs(game:GetService("Workspace").Cars:GetChildren()) do
                         if (tostring(car.Owner.Value) == game:GetService("Players").LocalPlayer.Name) then
-                            car.Main.CFrame = CFrame.new(0, 700, 0);
+                            car.Main.CFrame = CFrame.new(4900, 400, -5100);
                         end
                     end
                 end);
@@ -141,28 +225,62 @@ tabFarm:CreateTextbox("Farm speed (In seconds, default: 1-2)", function(val)
     farmSpeed = tonumber(val);
 end, "Change Farm Speed");
 
+tabFarm:CreateSlider("Fly Around Speed", 400, 1800, function(val)
+    vehicleFlySpeed = val
+end, 1200, false)
+
 tabFarm:CreateToggle("Flying around farm", false, function(val)
     flyaround = val
-    local car = getCar()
-    if not car then
-        warn("Car not found or PrimaryPart not set")
-        return
-    end
     if val then
         task.spawn(function()
             while flyaround do
-                pcall(function()
-                    flyCarTo(car, pointA, pointB, vehicleFlySpeed);
-                    flyCarTo(car, pointB, pointA, vehicleFlySpeed);
-                end)
+                local car = getCar()
+                if car and car.PrimaryPart then
+                    -- Teleport to start position
+                    TptoVector(flyaroundTeleportCoord)
+                    task.wait(1) -- wait a bit after teleport
+
+                    local startTime = tick()
+                    -- Fly for 30 minutes
+                    while flyaround and (tick() - startTime) < (flyaroundDuration * 60) do
+                        local currentCar = getCar()
+                        if not currentCar then
+                            warn("Car lost during flight, stopping this cycle.")
+                            break
+                        end
+                        pcall(function()
+                            flyCarTo(currentCar, pointA, pointB, vehicleFlySpeed)
+                            if flyaround and (tick() - startTime) < (flyaroundDuration * 60) then
+                                flyCarTo(currentCar, pointB, pointA, vehicleFlySpeed)
+                            end
+                        end)
+                    end
+
+                    -- After 30 mins or if toggle is turned off
+                    if flyaround then
+                        -- Teleport back and wait
+                        local finalCar = getCar()
+                        if finalCar and finalCar.PrimaryPart then
+                            TptoVector(flyaroundTeleportCoord)
+                            if finalCar.Parent then
+                                for _, part in ipairs(finalCar:GetDescendants()) do
+                                    if part:IsA("BasePart") then
+                                        part.Velocity = Vector3.new(0, 0, 0)
+                                        part.RotVelocity = Vector3.new(0, 0, 0)
+                                    end
+                                end
+                            end
+                        end
+                        task.wait(5)
+                    end
+                else
+                    -- No car found, wait before trying again
+                    warn("Car not found for fly around. Retrying in 5 seconds.")
+                    task.wait(5)
+                end
             end
         end)
     end
-    -- not working script below (commented)
-    -- while val do 
-    --     flyCarTo(car, pointA, pointB, vehicleFlySpeed)
-    --     flyCarTo(car, pointB, pointA, vehicleFlySpeed)
-    -- end
 end)
 
 local antiAFKGui = nil
@@ -206,7 +324,7 @@ function showAntiAFKGui()
     lblStatus.TextColor3 = Color3.new(0, 1, 1)
     lblStatus.TextSize = 20
     local virtUser = game:service("VirtualUser")
-    game:service("Players").LocalPlayer.Idled:connect(function()
+    antiAfkConnection = game:service("Players").LocalPlayer.Idled:connect(function()
         virtUser:CaptureController()
         virtUser:ClickButton2(Vector2.new())
         lblStatus.Text = "Roblox Tried to kick you but we didn't let them kick you :D"
@@ -214,6 +332,11 @@ function showAntiAFKGui()
         lblStatus.Text = "Status : Active"
     end)
 end
+
+tabFarm:CreateToggle("Vehicle Noclip", false, function(val)
+    toggleNoclip(val)
+end)
+
 tabFarm:CreateButton("Anti AFK", function()
     pcall(function()
         wait(0.5)
@@ -251,68 +374,36 @@ tabMisc:CreateButton("Inf Yield", function()
         loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))();
     end);
 end);
+
+tabMisc:CreateButton("Unload Script", function()
+    win:Destroy()
+end)
+
 tabCredits:CreateLabel("Made by Hiep");
 tabCredits:CreateLabel("Discord: Hiepvu123");
 tabCredits:CreateLabel("GitHub: https://github.com/vthiep2412/hiep-script");
 tabCredits:CreateLabel("This script is open source, for everyone to use, not update daily btw")
 local vehicleNoclip = false
 local noclipConnections = {}
+local originalCollisions = {}
 
-tabFarm:CreateToggle("Vehicle Noclip (Beta)", false, function(val)
-    vehicleNoclip = val
-    
-    if val then
-        local conn = game:GetService("RunService").Heartbeat:Connect(function()
-            pcall(function()
-                local player = game:GetService("Players").LocalPlayer
-                local character = player.Character or player.CharacterAdded:Wait()
-                
-                -- Set all collisions off
-                for _, part in pairs(character:GetDescendants()) do
-                    if part:IsA("BasePart") then
-                        part.CanCollide = false
-                    end
-                end
-                
-                for _, car in pairs(game:GetService("Workspace").Cars:GetChildren()) do
-                    if tostring(car.Owner.Value) == player.Name then
-                        for _, part in pairs(car:GetDescendants()) do
-                            if part:IsA("BasePart") then
-                                part.CanCollide = false
-                            end
-                        end
-                    end
-                end
-            end)
-        end)
-        table.insert(noclipConnections, conn)
-    else
-        -- Set all collisions back on
-        pcall(function()
-            local player = game:GetService("Players").LocalPlayer
-            local character = player.Character or player.CharacterAdded:Wait()
-            
-            for _, part in pairs(character:GetDescendants()) do
-                if part:IsA("BasePart") then
-                    part.CanCollide = true
-                end
-            end
-            
-            for _, car in pairs(game:GetService("Workspace").Cars:GetChildren()) do
-                if tostring(car.Owner.Value) == player.Name then
-                    for _, part in pairs(car:GetDescendants()) do
-                        if part:IsA("BasePart") then
-                            part.CanCollide = true
-                        end
-                    end
-                end
-            end
-        end)
-        
-        -- Cleanup connections
-        for _, conn in pairs(noclipConnections) do
-            conn:Disconnect()
-        end
-        noclipConnections = {}
+win:OnDestroy(function()
+    -- Disconnect signals
+    if dashConnection then dashConnection:Disconnect() end
+    if antiAfkConnection then antiAfkConnection:Disconnect() end
+
+    -- Stop loops
+    flyingFarm = false
+    flyaround = false
+
+    -- Clean up noclip
+    if vehicleNoclip then
+        toggleNoclip(false)
     end
+
+    -- Reset gravity
+    game:GetService("Workspace").Gravity = defaultGravity
+
+    -- Destroy anti-afk gui
+    if antiAFKGui then antiAFKGui:Destroy() end
 end)

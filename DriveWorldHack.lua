@@ -56,6 +56,9 @@ local function TptoVector(targetpos)
     root.Anchored = wasAnchored
 end
 
+local vehicleNoclip = false
+local noclipConnections = {}
+local originalCollisions = {}
 
 local function toggleNoclip(val)
     vehicleNoclip = val
@@ -233,16 +236,81 @@ tabFarm:CreateToggle("Flying around farm", false, function(val)
     flyaround = val
     if val then
         task.spawn(function()
+            print("starting farm")
+            local function respawnFirstCar()
+                pcall(function()
+                    local player = game:GetService("Players").LocalPlayer
+                    local character = player.Character or player.CharacterAdded:Wait()
+                    local hrp = character:WaitForChild("HumanoidRootPart")
+                    if not hrp then return end
+
+                    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+                    local CarsFolder = ReplicatedStorage:WaitForChild("PlayerData"):WaitForChild(player.Name):WaitForChild("Inventory"):WaitForChild("Cars")
+                    local CarModel = CarsFolder:FindFirstChildWhichIsA("Folder")
+
+                    if not CarModel then
+                        warn("Auto-respawn: No car found in inventory for player " .. player.Name)
+                        return
+                    end
+                    hrp.CFrame = CFrame.new(4100, 80, -5100)
+                    task.wait(1)
+                    print("respawning car")
+                    local playerCFrame = hrp.CFrame
+                    local args = {
+                        CarModel,
+                        [3] = playerCFrame
+                    }
+                    -- print(playerCFrame)
+                    ReplicatedStorage:WaitForChild("Systems"):WaitForChild("CarInteraction"):WaitForChild("SpawnPlayerCar"):InvokeServer(unpack(args))
+                    task.wait(1)
+                    local CARRR = getCar()
+                    if CARRR and CARRR.PrimaryPart then
+                        CARRR:SetPrimaryPartCFrame(playerCFrame)
+                        print("car respawned")
+                    end
+                    local VirtualInputManager = game:GetService("VirtualInputManager")
+                    task.wait(1)
+                    VirtualInputManager:SendKeyEvent(true, "E", false, game)
+                    VirtualInputManager:SendKeyEvent(false, "E", false, game)
+                end)
+            end
+
             while flyaround do
                 local car = getCar()
                 if car and car.PrimaryPart then
+                    print("car found")
                     -- Teleport to start position
                     TptoVector(flyaroundTeleportCoord)
                     task.wait(1) -- wait a bit after teleport
 
                     local startTime = tick()
+                    local lastCheck = tick()
                     -- Fly for 30 minutes
                     while flyaround and (tick() - startTime) < (flyaroundDuration * 60) do
+                        if tick() - lastCheck > 10 then
+                            pcall(function()
+                                local player = game:GetService("Players").LocalPlayer
+                                local char = player.Character
+                                if not (char and char:FindFirstChild("HumanoidRootPart")) then return end
+                                local hrp = char.HumanoidRootPart
+                                local currentCar = getCar()
+
+                                if currentCar and currentCar.PrimaryPart then
+                                    local dist = (hrp.Position - currentCar.PrimaryPart.Position).Magnitude
+                                    if dist > 30 then
+                                        warn("Flyaround: Player is too far from car ("..tostring(dist).." studs). Respawning car.")
+                                        respawnFirstCar()
+                                    end
+                                else
+                                    warn("Flyaround: Car not found during flight. Respawning car.")
+                                    respawnFirstCar()
+                                end
+                            end)
+                            lastCheck = tick()
+                        else 
+                            print("car found, ticked")
+                        end
+
                         local currentCar = getCar()
                         if not currentCar then
                             warn("Car lost during flight, stopping this cycle.")
@@ -275,8 +343,9 @@ tabFarm:CreateToggle("Flying around farm", false, function(val)
                     end
                 else
                     -- No car found, wait before trying again
-                    warn("Car not found for fly around. Retrying in 5 seconds.")
-                    task.wait(5)
+                    warn("Car not found for fly around. Retrying in 3 seconds.")
+                    task.wait(3)
+                    respawnFirstCar()
                 end
             end
         end)
@@ -383,9 +452,6 @@ tabCredits:CreateLabel("Made by Hiep");
 tabCredits:CreateLabel("Discord: Hiepvu123");
 tabCredits:CreateLabel("GitHub: https://github.com/vthiep2412/hiep-script");
 tabCredits:CreateLabel("This script is open source, for everyone to use, not update daily btw")
-local vehicleNoclip = false
-local noclipConnections = {}
-local originalCollisions = {}
 
 win:OnDestroy(function()
     -- Disconnect signals

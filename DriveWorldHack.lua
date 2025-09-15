@@ -1,9 +1,9 @@
 --[[
-    Drive World Hack by Hiep
-    Keybind: RightAlt to toggle window
-    Features: Drop Farm, Flying Farm, Speed Dash, Noclip, and more.
-    v1.5: fix car enter, add box to reduce problem
-    next update: fix wrong seat entered
+- Drive World Hack by Hiep
+- Keybind: RightAlt to toggle window
+- Features: Drop Farm, Flying Farm, Speed Dash, Noclip, and more.
+- v1.5.1: fix car enter, add box to reduce problem, noclip for the farm reducing problem
+- next update: fix wrong seat entered
 ]]
 local ok, lib = pcall(loadstring(game:HttpGet(
     "https://raw.githubusercontent.com/vthiep2412/hiep-script/refs/heads/main/OsmiumLibraryFix.lua")));
@@ -67,6 +67,61 @@ local dropFarmToggle, flyingFarmToggle
 local antiAFKGui = nil
 local visualizationBox = nil
 
+-- Farm-related chunk references
+local targetChunk1, targetChunk2, dropFarmChunk
+
+--==============================================================================
+-- de collide part(important)
+--==============================================================================
+-- Utility: Safe chunk loader with timeout
+local function getChunk(folder, name, timeout)
+    if not folder then return nil end
+    local start = tick()
+    local chunk = folder:FindFirstChild(name)
+    while not chunk and tick() - start < timeout do
+        task.wait(0.1)
+        chunk = folder:FindFirstChild(name)
+    end
+    return chunk
+end
+
+-- Utility: Toggle collision for all parts in a model
+local function setCollision(model, state)
+    if not model then return end
+    pcall(function()
+        for _, obj in ipairs(model:GetDescendants()) do
+            if obj:IsA("BasePart") then
+                obj.CanCollide = state
+            end
+        end
+    end)
+end
+
+local function uncollideFarmChunks()
+    task.wait(3)
+    local terrainChunkFolder = workspace:WaitForChild("TerrainChunks", 10)
+    if not terrainChunkFolder then
+        warn("TerrainChunks folder not found! De-collide feature may not work.")
+        return
+    end
+
+    targetChunk1 = getChunk(terrainChunkFolder, "Chunk_X4608_Z-5632", 10)
+    targetChunk2 = getChunk(terrainChunkFolder, "Chunk_X4608_Z-5120", 10)
+    dropFarmChunk = getChunk(terrainChunkFolder, "Chunk_X4096_Z-5632", 10)
+
+    if targetChunk1 then setCollision(targetChunk1, false); print("Uncollided targetChunk1.") else warn("Could not find targetChunk1.") end
+    if targetChunk2 then setCollision(targetChunk2, false); print("Uncollided targetChunk2.") else warn("Could not find targetChunk2.") end
+    if dropFarmChunk then setCollision(dropFarmChunk, false); print("Uncollided dropFarmChunk.") else warn("Could not find dropFarmChunk.") end
+end
+
+local function collideFarmChunks()
+    if targetChunk1 then setCollision(targetChunk1, true) end
+    if targetChunk2 then setCollision(targetChunk2, true) end
+    if dropFarmChunk then setCollision(dropFarmChunk, true) end
+    print("Re-collided farm chunks.")
+    targetChunk1, targetChunk2, dropFarmChunk = nil, nil, nil
+end
+
 --==============================================================================
 -- Core Functions
 --==============================================================================
@@ -84,6 +139,7 @@ local function initAntiAFK()
                 lblStatus.Text = "Status : Active"
             end)
         end
+        print("Roblox Tried to kick you but we didn't let them kick you :D")
     end)
 end
 
@@ -168,7 +224,7 @@ local function setupVisualizationBox()
 
     local walls = {
         {Name = "TopWall", Size = Vector3.new(1002, 2, 602), Position = Vector3.new(4500, 700, -5000)},
-        {Name = "BottomWall", Size = Vector3.new(1002, 2, 602), Position = Vector3.new(4500, 60, -5000)},
+        {Name = "BottomWall", Size = Vector3.new(1002, 2, 602), Position = Vector3.new(4500, 50, -5000)},
         {Name = "RightWall", Size = Vector3.new(2, 640, 600), Position = Vector3.new(5000, 380, -5000)},
         {Name = "LeftWall", Size = Vector3.new(2, 640, 600), Position = Vector3.new(4000, 380, -5000)},
         {Name = "BackWall", Size = Vector3.new(1000, 640, 2), Position = Vector3.new(4500, 380, -4700)},
@@ -355,12 +411,15 @@ end, "Change Dash Power");
 -- Farm Tab
 dropFarmToggle = tabFarm:CreateToggle("Drop Farm", false, function(val)
     dropFarm = val;
+    updateBoxState(dropFarm or flyingFarm)
     if val then
         -- Ensure other farm is disabled
         flyingFarm = false
         if flyingFarmToggle then
             flyingFarmToggle:SetValue(false)
         end
+
+        task.spawn(uncollideFarmChunks)
 
         task.spawn(function()
             while dropFarm do
@@ -376,10 +435,10 @@ dropFarmToggle = tabFarm:CreateToggle("Drop Farm", false, function(val)
             end
         end);
     else
+        collideFarmChunks()
         -- Reset gravity when toggled off
         Workspace.Gravity = defaultGravity;
     end
-    updateBoxState(dropFarm or flyingFarm)
 end);
 
 tabFarm:CreateTextbox("Farm speed (In seconds, default: 0.2 to 0.5)", function(val)
@@ -398,6 +457,7 @@ end, 1200, false)
 
 flyingFarmToggle = tabFarm:CreateToggle("Flying Farm", false, function(val)
     flyingFarm = val
+    updateBoxState(dropFarm or flyingFarm)
     if val then
         -- Ensure other farm is disabled
         dropFarm = false
@@ -406,6 +466,8 @@ flyingFarmToggle = tabFarm:CreateToggle("Flying Farm", false, function(val)
         end
         -- Reset gravity in case drop farm was active
         Workspace.Gravity = defaultGravity
+
+        task.spawn(uncollideFarmChunks)
 
         task.spawn(function()
             print("starting farm")
@@ -536,8 +598,9 @@ flyingFarmToggle = tabFarm:CreateToggle("Flying Farm", false, function(val)
                 end
             end
         end)
+    else
+        collideFarmChunks()
     end
-    updateBoxState(dropFarm or flyingFarm)
 end)
 
 tabFarm:CreateToggle("Vehicle Noclip", false, function(val)

@@ -2,7 +2,7 @@
 - Drive World Hack by Hiep
 - Keybind: RightAlt to toggle window
 - Features: Drop Farm, Flying Farm, Speed Dash, Noclip, and more.
-- v1.5.1: fix car enter, add box to reduce problem, noclip for the farm reducing problem
+- v1.5.2: add back staff watch feature
 - next update: fix wrong seat entered
 ]]
 local ok, lib = pcall(loadstring(game:HttpGet(
@@ -70,6 +70,10 @@ local visualizationBox = nil
 -- Farm-related chunk references
 local targetChunk1, targetChunk2, dropFarmChunk
 
+-- Staff Watch state
+local staffWatchEnabled = false
+local playerAddedConnection = nil
+
 --==============================================================================
 -- de collide part(important)
 --==============================================================================
@@ -125,6 +129,41 @@ end
 --==============================================================================
 -- Core Functions
 --==============================================================================
+
+-- Keywords to identify staff roles.
+local staffKeywords = {
+    "mod", "admin", "staff", "dev", "founder", "owner", "supervis",
+    "manager", "management", "executive", "president", "chairman",
+    "chairwoman", "chairperson", "director", "moderator", "supervisor",
+    "administrator", "developer"
+};
+
+-- Checks if a player has a staff role in the group or is a Roblox employee.
+local function checkPlayerForStaffRole(playerToCheck)
+    local roleInGroup = playerToCheck:GetRoleInGroup(game.CreatorId)
+    local staffInfo = {
+        Role = roleInGroup,
+        IsStaff = false
+    }
+
+    -- Check for Roblox employees (group ID 1200769 is for Roblox Admins)
+    if playerToCheck:IsInGroup(1200769) then
+        staffInfo.Role = "Roblox Employee"
+        staffInfo.IsStaff = true
+    end
+
+    -- Check for group staff roles by keyword
+    if not staffInfo.IsStaff then
+        for _, keyword in ipairs(staffKeywords) do
+            if string.find(string.lower(roleInGroup), keyword) then
+                staffInfo.IsStaff = true
+                break -- Found a match, no need to check further
+            end
+        end
+    end
+
+    return staffInfo
+end
 
 -- Intercepts the Roblox idle kick message and simulates input to prevent it.
 local function initAntiAFK()
@@ -615,6 +654,41 @@ end)
 tabMisc:CreateButton("Anti AFK", function()
     manageAntiAFKGui()
 end)
+tabMisc:CreateToggle("Staff Watch", false, function(isEnabled)
+    staffWatchEnabled = isEnabled
+    if staffWatchEnabled then
+        if playerAddedConnection then
+            playerAddedConnection:Disconnect()
+        end
+
+        -- This feature only works in group games.
+        if game.CreatorType == Enum.CreatorType.Group then
+            -- Watch for new players joining.
+            playerAddedConnection = Players.PlayerAdded:Connect(function(newPlayer)
+                local playerStaffInfo = checkPlayerForStaffRole(newPlayer)
+                if playerStaffInfo and playerStaffInfo.IsStaff then
+                    player:Kick("A staff member has joined: " .. newPlayer.Name)
+                end
+            end)
+
+            -- Check players already in the server.
+            for _, playerInGame in ipairs(Players:GetPlayers()) do
+                -- Don't check the local player.
+                if playerInGame ~= player then
+                    local playerInGameStaffInfo = checkPlayerForStaffRole(playerInGame)
+                    if playerInGameStaffInfo and playerInGameStaffInfo.IsStaff then
+                        player:Kick("A staff member is already in the game: " .. playerInGame.Name)
+                    end
+                end
+            end
+        else
+            warn("Staff Watch: This is not a group game, so the feature won't run.")
+        end
+    elseif playerAddedConnection then
+        playerAddedConnection:Disconnect()
+        playerAddedConnection = nil
+    end
+end)
 tabMisc:CreateButton("Server Hop", function()
     pcall(function()
         local servers = HttpService:JSONDecode(game:HttpGet(
@@ -655,6 +729,7 @@ win:OnDestroy(function()
     -- Disconnect all event connections to prevent memory leaks
     if dashConnection then dashConnection:Disconnect() end
     if antiAfkConnection then antiAfkConnection:Disconnect() end
+    if playerAddedConnection then playerAddedConnection:Disconnect() end
 
     -- Stop any active farm loops
     dropFarm = false

@@ -1,13 +1,38 @@
 --[[
-- Drive World Hack by Hiep
+- Drive World Hack by Hiep v1.6
 - Keybind: RightAlt to toggle window
 - Features: Drop Farm, Flying Farm, Speed Dash, Noclip, and more.
-- v1.5.2: add back staff watch feature
-- next update: fix wrong seat entered
+- v1.6: i think wrong seat are prevent able, but i cant handle it,
+    fix money collecting by remove snap and only remove velocity,
+    add debug and reformat debuging, add respawn for drop farm just in case,
+    fix code issue and syntax
+- Test/support executor:
+    velocity: fully support (any level 8 and high unc is support like velocity)
+- Not tested executor:
+    volcano: not test but still good in my opinion
+    solara: shit dont use this, low unc and level
+    xeno: even more shit than solara (xeno is detected and low unc and level)
+    jjsploit: equal solara, better than xeno
+    ronix: idk, it keyed btw
+    drift: idk, it keyed btw
+    lx63: lot of issue, error, crash but high unc and level
+- Most executor that not scam could be found in these 3 website:
+    https://wearedevs.net/home
+    https://voxlis.net/roblox/
+    https://weao.gg/
 ]]
+print("[Hiep's Script] [Loader] Starting script...")
 local ok, lib = pcall(loadstring(game:HttpGet(
     "https://raw.githubusercontent.com/vthiep2412/hiep-script/refs/heads/main/OsmiumLibraryFix.lua")));
+
+if not ok or not lib then
+    warn("[Hiep's Script] [Loader] Critical error: Failed to load Osmium library. The script cannot continue.")
+    return
+end
+print("[Hiep's Script] [Loader] Osmium library loaded successfully.")
+
 local win = lib:CreateWindow("Drive World Hack - Keybind: RightAlt");
+print("[Hiep's Script] [UI] Main window created.")
 
 --==============================================================================
 -- UI Setup
@@ -16,6 +41,7 @@ local tabFarm = win:CreateTab("Farm");
 local tabRace = win:CreateTab("Race");
 local tabMisc = win:CreateTab("Misc");
 local tabCredits = win:CreateTab("Credits");
+print("[Hiep's Script] [UI] Tabs created.")
 
 --==============================================================================
 -- Services & Globals
@@ -34,26 +60,31 @@ local VirtualInputManager = game:GetService("VirtualInputManager")
 
 -- Local player reference
 local player = Players.LocalPlayer
+print("[Hiep's Script] [Globals] Services and local player cached.")
 
 --==============================================================================
 -- Configuration & State Variables
 --==============================================================================
 
 -- General script state
+local isDebugMode = false
 local speedDash = false;
 local dashKey = Enum.KeyCode.F;
 local defaultGravity = Workspace.Gravity;
-local farmSpeed = 0.1;
+local farmSpeed = 0.05;
 local dashPower = 0.005;
 
 -- Farm-specific state variables
 local dropFarm = false
-local flyingFarm = false 
+local flyingFarm = false
+local isPaused = false -- For pausing farm loops safely
 local vehicleFlySpeed = 1200 -- studs/sec
 local pointA = Vector3.new(4100, 100, -5100)
 local pointB = Vector3.new(4900, 410, -5100)
 local flyaroundTeleportCoord = Vector3.new(4100, 80, -5100) -- <<< CHANGE THIS: Coordinate to teleport to for fly around farm
+local dropFarmTeleportCoord = Vector3.new(4900, 80, -5100)
 local flyaroundDuration = 20 -- Duration in minutes for the fly around cycle
+local dropFarmDuration = 20
 
 -- Holds connections to events to be disconnected later
 local dashConnection = nil
@@ -68,11 +99,28 @@ local antiAFKGui = nil
 local visualizationBox = nil
 
 -- Farm-related chunk references
-local targetChunk1, targetChunk2, dropFarmChunk
+local targetChunk1, targetChunk2, dropFarmChunk, dropFarmChunk2
 
 -- Staff Watch state
 local staffWatchEnabled = false
 local playerAddedConnection = nil
+
+-- Money Counter state
+local moneyCounterEnabled = false
+local initialMoney = 0
+print("[Hiep's Script] [Config] All state variables initialized.")
+
+--==============================================================================
+-- Debugger
+--==============================================================================
+local function debugPrint(message, isWarning)
+    if not isDebugMode then return end
+    if isWarning then
+        warn(message)
+    else
+        print(message)
+    end
+end
 
 --==============================================================================
 -- de collide part(important)
@@ -102,28 +150,34 @@ local function setCollision(model, state)
 end
 
 local function uncollideFarmChunks()
+    debugPrint("[Hiep's Script] [Collision] Starting to uncollide farm chunks.")
     task.wait(3)
     local terrainChunkFolder = workspace:WaitForChild("TerrainChunks", 10)
     if not terrainChunkFolder then
-        warn("TerrainChunks folder not found! De-collide feature may not work.")
+        debugPrint("[Hiep's Script] [Collision] TerrainChunks folder not found! De-collide feature may not work.", true)
         return
     end
 
     targetChunk1 = getChunk(terrainChunkFolder, "Chunk_X4608_Z-5632", 10)
     targetChunk2 = getChunk(terrainChunkFolder, "Chunk_X4608_Z-5120", 10)
     dropFarmChunk = getChunk(terrainChunkFolder, "Chunk_X4096_Z-5632", 10)
+    dropFarmChunk2 = getChunk(terrainChunkFolder, "Chunk_X4096_Z-6144", 10)
 
-    if targetChunk1 then setCollision(targetChunk1, false); print("Uncollided targetChunk1.") else warn("Could not find targetChunk1.") end
-    if targetChunk2 then setCollision(targetChunk2, false); print("Uncollided targetChunk2.") else warn("Could not find targetChunk2.") end
-    if dropFarmChunk then setCollision(dropFarmChunk, false); print("Uncollided dropFarmChunk.") else warn("Could not find dropFarmChunk.") end
+    if targetChunk1 then setCollision(targetChunk1, false); debugPrint("[Hiep's Script] [Collision] Uncollided targetChunk1.") else debugPrint("[Hiep's Script] [Collision] Could not find targetChunk1.", true) end
+    if targetChunk2 then setCollision(targetChunk2, false); debugPrint("[Hiep's Script] [Collision] Uncollided targetChunk2.") else debugPrint("[Hiep's Script] [Collision] Could not find targetChunk2.", true) end
+    if dropFarmChunk then setCollision(dropFarmChunk, false); debugPrint("[Hiep's Script] [Collision] Uncollided dropFarmChunk.") else debugPrint("[Hiep's Script] [Collision] Could not find dropFarmChunk.", true) end
+    if dropFarmChunk2 then setCollision(dropFarmChunk2, false); debugPrint("[Hiep's Script] [Collision] Uncollided dropFarmChunk2.") else debugPrint("[Hiep's Script] [Collision] Could not find dropFarmChunk2.", true) end
+    debugPrint("[Hiep's Script] [Collision] Finished uncolliding chunks.")
 end
 
 local function collideFarmChunks()
+    debugPrint("[Hiep's Script] [Collision] Re-colliding farm chunks.")
     if targetChunk1 then setCollision(targetChunk1, true) end
     if targetChunk2 then setCollision(targetChunk2, true) end
     if dropFarmChunk then setCollision(dropFarmChunk, true) end
-    print("Re-collided farm chunks.")
-    targetChunk1, targetChunk2, dropFarmChunk = nil, nil, nil
+    if dropFarmChunk2 then setCollision(dropFarmChunk2, true) end
+    debugPrint("[Hiep's Script] [Collision] Finished re-colliding chunks.")
+    targetChunk1, targetChunk2, dropFarmChunk, dropFarmChunk2 = nil, nil, nil, nil
 end
 
 --==============================================================================
@@ -137,6 +191,17 @@ local staffKeywords = {
     "chairwoman", "chairperson", "director", "moderator", "supervisor",
     "administrator", "developer"
 };
+
+-- Formats a number with commas for readability.
+local function formatMoney(amount)
+    local formatted = tostring(math.floor(amount))
+    while true do
+        local k
+        formatted, k = string.gsub(formatted, "^(-?%d+)(%d%d%d)", '%1,%2')
+        if k == 0 then break end
+    end
+    return "$" .. formatted
+end
 
 -- Checks if a player has a staff role in the group or is a Roblox employee.
 local function checkPlayerForStaffRole(playerToCheck)
@@ -168,6 +233,7 @@ end
 -- Intercepts the Roblox idle kick message and simulates input to prevent it.
 local function initAntiAFK()
     antiAfkConnection = Players.LocalPlayer.Idled:connect(function()
+        debugPrint("[Hiep's Script] [Anti-AFK] Idle detected, preventing kick.")
         VirtualUser:CaptureController()
         VirtualUser:ClickButton2(Vector2.new())
         if antiAFKGui and antiAFKGui.Enabled then
@@ -178,25 +244,25 @@ local function initAntiAFK()
                 lblStatus.Text = "Status : Active"
             end)
         end
-        print("Roblox Tried to kick you but we didn't let them kick you :D")
     end)
+    debugPrint("[Hiep's Script] [Anti-AFK] Initialized.")
 end
 
 -- Creates or toggles the visibility of the Anti-AFK status GUI.
 local function manageAntiAFKGui()
     if antiAFKGui and antiAFKGui.Parent then
-        -- If GUI exists, just toggle its visibility
         antiAFKGui.Enabled = not antiAFKGui.Enabled
+        debugPrint("[Hiep's Script] [Anti-AFK] Toggled GUI visibility to: " .. tostring(antiAFKGui.Enabled))
         return
     end
 
-    -- Create the GUI for the first time if it doesn't exist
+    debugPrint("[Hiep's Script] [Anti-AFK] Creating GUI for the first time.")
     antiAFKGui = Instance.new("ScreenGui")
     local lblTitle = Instance.new("TextLabel")
     local frame = Instance.new("Frame")
     local lblMade = Instance.new("TextLabel")
     local lblStatus = Instance.new("TextLabel")
-    
+
     antiAFKGui.Name = "AntiAFKGui"
     antiAFKGui.Parent = CoreGui
     antiAFKGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
@@ -244,7 +310,7 @@ end
 -- Controls the visibility and collision of the visualization box based on farm state.
 local function updateBoxState(isFarming)
     if not visualizationBox then return end
-
+    debugPrint("[Hiep's Script] [Farm-Vis] Updating visualization box state. Farming: " .. tostring(isFarming))
     local targetTransparency = isFarming and 0.75 or 1
     local targetCollide = isFarming
 
@@ -262,12 +328,12 @@ local function setupVisualizationBox()
     visualizationBox.Name = "VisualizationBox"
 
     local walls = {
-        {Name = "TopWall", Size = Vector3.new(1002, 2, 602), Position = Vector3.new(4500, 700, -5000)},
-        {Name = "BottomWall", Size = Vector3.new(1002, 2, 602), Position = Vector3.new(4500, 50, -5000)},
-        {Name = "RightWall", Size = Vector3.new(2, 640, 600), Position = Vector3.new(5000, 380, -5000)},
-        {Name = "LeftWall", Size = Vector3.new(2, 640, 600), Position = Vector3.new(4000, 380, -5000)},
-        {Name = "BackWall", Size = Vector3.new(1000, 640, 2), Position = Vector3.new(4500, 380, -4700)},
-        {Name = "FrontWall", Size = Vector3.new(1000, 640, 2), Position = Vector3.new(4500, 380, -5300)}
+        {Name = "TopWall", Size = Vector3.new(1002, 20, 602), Position = Vector3.new(4500, 700, -5000)},
+        {Name = "BottomWall", Size = Vector3.new(1002, 20, 602), Position = Vector3.new(4500, 5, -5000)},
+        {Name = "RightWall", Size = Vector3.new(20, 670, 600), Position = Vector3.new(5000, 350, -5000)},
+        {Name = "LeftWall", Size = Vector3.new(20, 670, 600), Position = Vector3.new(4000, 350, -5000)},
+        {Name = "BackWall", Size = Vector3.new(1000, 670, 20), Position = Vector3.new(4500, 350, -4700)},
+        {Name = "FrontWall", Size = Vector3.new(1000, 670, 20), Position = Vector3.new(4500, 350, -5300)}
     }
 
     for _, wallInfo in ipairs(walls) do
@@ -281,6 +347,7 @@ local function setupVisualizationBox()
         wall.Material = Enum.Material.Neon
         wall.Transparency = 1 -- Initially invisible
     end
+    debugPrint("[Hiep's Script] [Farm-Vis] Visualization box created.")
 end
 
 -- Finds and returns the player's currently owned car.
@@ -290,35 +357,32 @@ local function getCar()
             return car
         end
     end
+    return nil
 end
 
 -- Teleports the player's car to a specific Vector3 position.
 local function TptoVector(targetpos)
+    debugPrint("[Hiep's Script] [Teleport] Attempting to teleport car to: " .. tostring(targetpos))
     local car = getCar()
     if not (car and car.PrimaryPart) then
-        warn("Player car not found for GoTo.")
+        debugPrint("[Hiep's Script] [Teleport] Player car not found for teleport.", true)
         return false
     end
-    local root = car.PrimaryPart
-    local wasAnchored = root.Anchored
-    root.Anchored = true
-    task.wait() -- Wait a moment for anchor to take effect
+    task.wait()
     car:SetPrimaryPartCFrame(CFrame.new(targetpos))
     task.wait(1)
-    root.Anchored = wasAnchored
+    debugPrint("[Hiep's Script] [Teleport] Car teleported successfully. Pos TPed: "..tostring(targetpos))
 end
 
 -- Enables or disables noclip for the player and their vehicle.
 local function toggleNoclip(val)
     vehicleNoclip = val
-    
+    debugPrint("[Hiep's Script] [Noclip] Toggled to: " .. tostring(val))
     if val then
-        -- Noclip ON: Store original collision states and set CanCollide to false.
-        originalCollisions = {} 
+        originalCollisions = {}
         local conn = RunService.Heartbeat:Connect(function()
             pcall(function()
                 local character = player.Character or player.CharacterAdded:Wait()
-                
                 local function processPart(part)
                     if part:IsA("BasePart") then
                         if originalCollisions[part] == nil then
@@ -342,7 +406,6 @@ local function toggleNoclip(val)
         end)
         table.insert(noclipConnections, conn)
     else
-        -- Noclip OFF: Disconnect the Heartbeat loop and restore original collision states.
         for _, conn in ipairs(noclipConnections) do
             conn:Disconnect()
         end
@@ -357,11 +420,65 @@ local function toggleNoclip(val)
         end)
         
         originalCollisions = {}
+        debugPrint("[Hiep's Script] [Noclip] Restored original collisions.")
     end
+end
+
+-- Spawns the player's first car at a given coordinate.
+local function respawnCarAtCoord(coord)
+    isPaused = true
+    debugPrint("[Hiep's Script] [Respawn] Starting car respawn process at: " .. tostring(coord))
+    pcall(function()
+        task.wait()
+        local character = player.Character or player.CharacterAdded:Wait()
+        local hrp = character:WaitForChild("HumanoidRootPart")
+        if not hrp then
+            debugPrint("[Hiep's Script] [Respawn] Failed to find HumanoidRootPart.", true)
+            isPaused = false; return
+        end
+
+        local CarsFolder = ReplicatedStorage:WaitForChild("PlayerData"):WaitForChild(player.Name):WaitForChild("Inventory"):WaitForChild("Cars")
+        local CarModel = CarsFolder:FindFirstChildWhichIsA("Folder")
+
+        if not CarModel then
+            debugPrint("[Hiep's Script] [Respawn] No car found in inventory for player " .. player.Name, true)
+            isPaused = false
+            return
+        end
+        
+        debugPrint("[Hiep's Script] [Respawn] Teleporting player to coordinate.")
+        hrp.CFrame = CFrame.new(coord)
+        task.wait(1)
+        
+        local playerCFrame = hrp.CFrame
+        debugPrint("[Hiep's Script] [Respawn] Invoking server to spawn car at CFrame: " .. tostring(playerCFrame))
+        local args = {
+            CarModel,
+            [3] = playerCFrame
+        }
+        ReplicatedStorage:WaitForChild("Systems"):WaitForChild("CarInteraction"):WaitForChild("SpawnPlayerCar"):InvokeServer(unpack(args))
+        task.wait(1)
+        
+        local newCar = getCar()
+        if newCar and newCar.PrimaryPart then
+            debugPrint("[Hiep's Script] [Respawn] New car found, snapping to position.")
+            newCar:SetPrimaryPartCFrame(playerCFrame + Vector3.new(10, 0, 0))
+        else
+            debugPrint("[Hiep's Script] [Respawn] Failed to find newly spawned car.", true)
+        end
+        
+        debugPrint("[Hiep's Script] [Respawn] Simulating 'E' key press to enter car.")
+        VirtualInputManager:SendKeyEvent(true, "E", false, game)
+        VirtualInputManager:SendKeyEvent(false, "E", false, game)
+        task.wait(0.5)
+    end)
+    debugPrint("[Hiep's Script] [Respawn] Car respawn process finished.")
+    isPaused = false
 end
 
 -- Uses BodyMovers to fly a car from a start to an end position.
 local function flyCarTo(car, startPos, endPos, speed)
+    debugPrint("[Hiep's Script] [Fly] Flying car from " .. tostring(startPos) .. " to " .. tostring(endPos))
     local root = car.PrimaryPart
     local BG = Instance.new("BodyGyro")
     local BV = Instance.new("BodyVelocity")
@@ -379,8 +496,7 @@ local function flyCarTo(car, startPos, endPos, speed)
     local travelTime = distance / speed
     local elapsed = 0
 
-    -- Keep flying until the destination is reached or the farm is toggled off.
-    while elapsed < travelTime and flyingFarm do
+    while elapsed < travelTime and flyingFarm and not isPaused do
         BV.velocity = direction * speed
         BG.cframe = CFrame.new(root.Position, endPos)
         elapsed += task.wait()
@@ -391,6 +507,7 @@ local function flyCarTo(car, startPos, endPos, speed)
     if elapsed >= travelTime then
         root.CFrame = CFrame.new(endPos)
     end
+    debugPrint("[Hiep's Script] [Fly] Flight segment finished. End position: "..tostring(endPos))
 end
 
 -- Applies a forward velocity to the player's car.
@@ -400,6 +517,7 @@ function dash(dashPower, dirhehe)
         local velocity = dirhehe * defaultGravity * dashPower;
         for _, car in pairs(Workspace.Cars:GetChildren()) do
             if (tostring(car.Owner.Value) == player.Name) then
+                debugPrint("[Hiep's Script] [Dash] Applying dash velocity.")
                 for _, part in pairs(car:GetDescendants()) do
                     if (part:IsA("BasePart") and not part.Anchored) then
                         part.Velocity = part.Velocity + velocity;
@@ -413,10 +531,9 @@ end
 --==============================================================================
 -- Feature Initialization
 --==============================================================================
--- Activates the Anti-AFK logic immediately on script load.
 initAntiAFK()
--- Creates the visualization box but keeps it hidden until a farm is active.
 setupVisualizationBox()
+print("[Hiep's Script] [Init] Core features initialized.")
 
 --==============================================================================
 -- UI Element Creation
@@ -425,6 +542,7 @@ setupVisualizationBox()
 -- Race Tab
 tabRace:CreateToggle("Speed Dash [keybind: F]", false, function(val)
     speedDash = val;
+    debugPrint("[Hiep's Script] [UI] Speed Dash toggled to: " .. tostring(val))
 end);
 dashConnection = UserInputService.InputBegan:Connect(function(input, isProcessed)
     if isProcessed then return end
@@ -442,203 +560,225 @@ tabRace:CreateTextbox("Dash Power [default: 5]", function(val)
     if (tonumber(val) == nil) then return end
     if (tonumber(val) <= 0) then
         dashPower = 0.001;
-        return;
+    else
+        dashPower = tonumber(val) * 0.001;
     end
-    dashPower = tonumber(val) * 0.001;
+    debugPrint("[Hiep's Script] [UI] Dash Power set to: " .. tostring(dashPower))
 end, "Change Dash Power");
 
 -- Farm Tab
 dropFarmToggle = tabFarm:CreateToggle("Drop Farm", false, function(val)
     dropFarm = val;
+    debugPrint("[Hiep's Script] [DropFarm] Toggled to: " .. tostring(val))
     updateBoxState(dropFarm or flyingFarm)
     if val then
-        -- Ensure other farm is disabled
         flyingFarm = false
         if flyingFarmToggle then
             flyingFarmToggle:SetValue(false)
         end
-
-        task.spawn(uncollideFarmChunks)
-
+        debugPrint("[Hiep's Script] [DropFarm] Starting farm monitor and main loop.")
         task.spawn(function()
             while dropFarm do
+                task.wait(5)
                 pcall(function()
-                    Workspace.Gravity = 500;
-                    for _, car in pairs(Workspace.Cars:GetChildren()) do
-                        if (tostring(car.Owner.Value) == player.Name) then
-                            car.Main.CFrame = CFrame.new(4900, 415, -5100);
+                    if isPaused or not dropFarm then return end
+                    local needsRespawn = false
+                    local reason = ""
+
+                    local char = player.Character
+                    local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+
+                    if not (humanoid and humanoid.Health > 0) then
+                        needsRespawn = true
+                        reason = "Player is dead or character not found."
+                    else
+                        local currentCar = getCar()
+                        if not (currentCar and currentCar.PrimaryPart) then
+                            needsRespawn = true
+                            reason = "Car not found."
+                        else
+                            local hrp = char:FindFirstChild("HumanoidRootPart")
+                            if hrp then
+                                local dist = (hrp.Position - currentCar.PrimaryPart.Position).Magnitude
+                                if dist > 50 then
+                                    needsRespawn = true
+                                    reason = "Player is too far from car ("..tostring(dist).." studs)."
+                                end
+                            end
                         end
                     end
-                end);
-                task.wait(farmSpeed);
+
+                    if needsRespawn then
+                        debugPrint("[Hiep's Script] [DropFarm-Monitor] Condition triggered respawn. Reason: " .. reason, true)
+                        respawnCarAtCoord(dropFarmTeleportCoord)
+                        task.wait(5)
+                    end
+                end)
+            end
+        end)
+
+        task.spawn(uncollideFarmChunks)
+        task.spawn(function()
+            while dropFarm do
+                local startTime = tick()
+                debugPrint("[Hiep's Script] [DropFarm] Starting new drop cycle for " .. dropFarmDuration .. " minutes.")
+                while dropFarm and (tick() - startTime) < (dropFarmDuration * 60) and not isPaused do
+                    pcall(function()
+                        Workspace.Gravity = 490;
+                        local car = getCar()
+                        if car and not isPaused then
+                            car.Main.CFrame = CFrame.new(4900, 430, -5100);
+                        end
+                    end);
+                    task.wait(farmSpeed);
+                end
+
+                if dropFarm and not isPaused then
+                    debugPrint("[Hiep's Script] [DropFarm] Drop cycle finished. Resetting car velocity and wait for collecting money.")
+                    local finalCar = getCar()
+                    if finalCar and finalCar.PrimaryPart and finalCar.Parent then
+                        for _, part in ipairs(finalCar:GetDescendants()) do
+                            if part:IsA("BasePart") then
+                                part.Velocity = Vector3.new(0, 0, 0)
+                                part.RotVelocity = Vector3.new(0, 0, 0)
+                            end
+                        end
+                    end
+                    task.wait(6)
+                end
             end
         end);
     else
         collideFarmChunks()
-        -- Reset gravity when toggled off
         Workspace.Gravity = defaultGravity;
+        debugPrint("[Hiep's Script] [DropFarm] Disabled. Gravity restored.")
     end
 end);
 
-tabFarm:CreateTextbox("Farm speed (In seconds, default: 0.2 to 0.5)", function(val)
+tabFarm:CreateTextbox("Farm speed (In seconds, default: 0.05 to 0.3)", function(val)
     if (val == "") then return end
     if (tonumber(val) == nil) then return end
     if (tonumber(val) <= 0) then
-        farmSpeed = 0.1;
-        return;
+        farmSpeed = 0;
+    else
+        farmSpeed = tonumber(val);
     end
-    farmSpeed = tonumber(val);
+    debugPrint("[Hiep's Script] [UI] Farm Speed set to: " .. tostring(farmSpeed))
 end, "Change Farm Speed");
 
 tabFarm:CreateSlider("Fly Around Speed", 400, 1800, function(val)
     vehicleFlySpeed = val
+    debugPrint("[Hiep's Script] [UI] Fly Around Speed set to: " .. tostring(val))
 end, 1200, false)
 
 flyingFarmToggle = tabFarm:CreateToggle("Flying Farm", false, function(val)
     flyingFarm = val
+    debugPrint("[Hiep's Script] [FlyingFarm] Toggled to: " .. tostring(val))
     updateBoxState(dropFarm or flyingFarm)
     if val then
-        -- Ensure other farm is disabled
         dropFarm = false
         if dropFarmToggle then
             dropFarmToggle:SetValue(false)
         end
-        -- Reset gravity in case drop farm was active
         Workspace.Gravity = defaultGravity
-
-        task.spawn(uncollideFarmChunks)
-
+        debugPrint("[Hiep's Script] [FlyingFarm] Starting farm monitor and main loop.")
         task.spawn(function()
-            print("starting farm")
-            local function respawnFirstCar()
+            while flyingFarm do
+                task.wait(5)
                 pcall(function()
-                    print("respawning car 1")
-                    flyingFarm = false
-                    task.wait()
-                    local character = player.Character or player.CharacterAdded:Wait()
-                    local hrp = character:WaitForChild("HumanoidRootPart")
-                    if not hrp then return end
+                    if isPaused or not flyingFarm then return end
+                    local needsRespawn = false
+                    local reason = ""
 
-                    local CarsFolder = ReplicatedStorage:WaitForChild("PlayerData"):WaitForChild(player.Name):WaitForChild("Inventory"):WaitForChild("Cars")
-                    local CarModel = CarsFolder:FindFirstChildWhichIsA("Folder")
+                    local char = player.Character
+                    local humanoid = char and char:FindFirstChildOfClass("Humanoid")
 
-                    if not CarModel then
-                        warn("Auto-respawn: No car found in inventory for player " .. player.Name)
-                        return
-                    end
-                    hrp.CFrame = CFrame.new(4100, 80, -5100)
-                    task.wait(1)
-                    print("respawning car 2")
-                    local playerCFrame = hrp.CFrame
-                    print("playerCFrame: ", playerCFrame)
-                    local args = {
-                        CarModel,
-                        [3] = playerCFrame
-                    }
-                    print("args: ", args)
-                    ReplicatedStorage:WaitForChild("Systems"):WaitForChild("CarInteraction"):WaitForChild("SpawnPlayerCar"):InvokeServer(unpack(args))
-                    task.wait(1)
-                    local CARRR = getCar()
-                    print("getted car: ", CARRR)
-                    if CARRR and CARRR.PrimaryPart then
-                        print("snapping car")
-                        CARRR:SetPrimaryPartCFrame(playerCFrame + Vector3.new(10, 0, 0))
-                        print("car respawned and +10 studs")
+                    if not (humanoid and humanoid.Health > 0) then
+                        needsRespawn = true
+                        reason = "Player is dead or character not found."
                     else
-                        respawnFirstCar()
-                        print("respawn car not found")
-                        return
+                        local currentCar = getCar()
+                        if not (currentCar and currentCar.PrimaryPart) then
+                            needsRespawn = true
+                            reason = "Car not found."
+                        else
+                            local hrp = char:FindFirstChild("HumanoidRootPart")
+                            if hrp then
+                                local dist = (hrp.Position - currentCar.PrimaryPart.Position).Magnitude
+                                if dist > 50 then
+                                    needsRespawn = true
+                                    reason = "Player is too far from car ("..tostring(dist).." studs)."
+                                end
+                            end
+                        end
                     end
-                    print("pressing E")
-                    VirtualInputManager:SendKeyEvent(true, "E", false, game)
-                    VirtualInputManager:SendKeyEvent(false, "E", false, game)
-                    task.wait(0.5)
-                    flyingFarm = true
+
+                    if needsRespawn then
+                        debugPrint("[Hiep's Script] [FlyingFarm-Monitor] Condition triggered respawn. Reason: " .. reason, true)
+                        respawnCarAtCoord(flyaroundTeleportCoord)
+                        task.wait(5)
+                    end
                 end)
             end
-
+        end)
+        task.spawn(uncollideFarmChunks)
+        task.spawn(function()
             while flyingFarm do
+                while isPaused and flyingFarm do
+                    task.wait(0.1)
+                end
+                if not flyingFarm then break end
+
                 local car = getCar()
                 if car and car.PrimaryPart then
-                    print("car found")
                     TptoVector(flyaroundTeleportCoord)
-                    task.wait(1) 
+                    task.wait(1)
 
                     local startTime = tick()
-                    local lastCheck = tick()
-                    -- Main farm loop; runs for the specified duration.
+                    debugPrint("[Hiep's Script] [FlyingFarm] Starting new fly cycle for " .. flyaroundDuration .. " minutes.")
                     while flyingFarm and (tick() - startTime) < (flyaroundDuration * 60) do
-                        if tick() - lastCheck > 5 then
-                            pcall(function()
-                                local char = player.Character
-                                if not (char and char:FindFirstChild("HumanoidRootPart")) then return end
-                                local hrp = char.HumanoidRootPart
-                                local currentCar = getCar()
-
-                                if currentCar and currentCar.PrimaryPart then
-                                    local dist = (hrp.Position - currentCar.PrimaryPart.Position).Magnitude
-                                    if dist > 30 then
-                                        warn("Flyaround: Player is too far from car ("..tostring(dist).." studs). Respawning car.")
-                                        respawnFirstCar()
-                                    end
-                                else
-                                    warn("Flyaround: Car not found during flight. Respawning car.")
-                                    respawnFirstCar()
-                                    task.wait(1)
-                                end
-                            end)
-                            lastCheck = tick()
+                        if isPaused then
+                            task.wait(0.5)
                         else
-                            local carcheck = getCar()
-                            if carcheck and carcheck.PrimaryPart then
-                                print("car found, ", carcheck.PrimaryPart.Position)
+                            local currentCar = getCar()
+                            if currentCar and currentCar.PrimaryPart then
+                                pcall(function()
+                                    flyCarTo(currentCar, pointA, pointB, vehicleFlySpeed)
+                                    if flyingFarm and (tick() - startTime) < (flyaroundDuration * 60) then
+                                        flyCarTo(currentCar, pointB, pointA, vehicleFlySpeed)
+                                    end
+                                end)
                             else
-                                warn("Flyaround: Car lost during flight. Respawning car.")
-                                respawnFirstCar()
+                                debugPrint("[Hiep's Script] [FlyingFarm] Car not found mid-loop. Waiting for monitor to respawn.", true)
                                 task.wait(1)
                             end
                         end
-
-                        local currentCar = getCar()
-                        if not currentCar then
-                            warn("Car lost during flight, stopping this cycle.")
-                            break
-                        end
-                        pcall(function()
-                            flyCarTo(currentCar, pointA, pointB, vehicleFlySpeed)
-                            if flyingFarm and (tick() - startTime) < (flyaroundDuration * 60) then
-                                flyCarTo(currentCar, pointB, pointA, vehicleFlySpeed)
-                            end
-                        end)
                     end
 
-                    -- After the farm duration, or if the toggle is disabled manually.
-                    if flyingFarm then
-                        -- Teleport the car back to the starting area and reset its velocity.
+                    if flyingFarm and not isPaused then
+                        debugPrint("[Hiep's Script] [FlyingFarm] Fly cycle finished. Resetting car velocity.")
                         local finalCar = getCar()
-                        if finalCar and finalCar.PrimaryPart then
-                            TptoVector(flyaroundTeleportCoord)
-                            if finalCar.Parent then
-                                for _, part in ipairs(finalCar:GetDescendants()) do
-                                    if part:IsA("BasePart") then
-                                        part.Velocity = Vector3.new(0, 0, 0)
-                                        part.RotVelocity = Vector3.new(0, 0, 0)
-                                    end
+                        if finalCar and finalCar.PrimaryPart and finalCar.Parent then
+                            for _, part in ipairs(finalCar:GetDescendants()) do
+                                if part:IsA("BasePart") then
+                                    part.Velocity = Vector3.new(0, 0, 0)
+                                    part.RotVelocity = Vector3.new(0, 0, 0)
                                 end
                             end
                         end
-                        task.wait(5)
+                        task.wait(6)
                     end
                 else
-                    -- If no car is found, try to respawn it.
-                    warn("Car not found for fly around. Retrying in 3 seconds.")
-                    respawnFirstCar()
+                    debugPrint("[Hiep's Script] [FlyingFarm] Car not found at start of loop. Attempting respawn.", true)
+                    respawnCarAtCoord(flyaroundTeleportCoord)
                     task.wait(3)
                 end
             end
         end)
     else
+        isPaused = false
         collideFarmChunks()
+        debugPrint("[Hiep's Script] [FlyingFarm] Disabled.")
     end
 end)
 
@@ -651,50 +791,99 @@ tabFarm:CreateButton("Anti AFK", function()
 end)
 
 -- Misc Tab
+tabMisc:CreateToggle("Enable Debug Console", false, function(val)
+    isDebugMode = val
+    if val then
+        print("[Hiep's Script] [Debug] Debug console enabled.")
+    else
+        print("[Hiep's Script] [Debug] Debug console disabled.")
+    end
+end)
+
 tabMisc:CreateButton("Anti AFK", function()
     manageAntiAFKGui()
 end)
+
 tabMisc:CreateToggle("Staff Watch", false, function(isEnabled)
     staffWatchEnabled = isEnabled
+    debugPrint("[Hiep's Script] [StaffWatch] Toggled to: " .. tostring(isEnabled))
     if staffWatchEnabled then
         if playerAddedConnection then
             playerAddedConnection:Disconnect()
         end
 
-        -- This feature only works in group games.
         if game.CreatorType == Enum.CreatorType.Group then
-            -- Watch for new players joining.
+            debugPrint("[Hiep's Script] [StaffWatch] Group game detected. Activating watch.")
             playerAddedConnection = Players.PlayerAdded:Connect(function(newPlayer)
                 local playerStaffInfo = checkPlayerForStaffRole(newPlayer)
                 if playerStaffInfo and playerStaffInfo.IsStaff then
+                    debugPrint("[Hiep's Script] [StaffWatch] Staff member joined: " .. newPlayer.Name .. ". Kicking local player.", true)
                     player:Kick("A staff member has joined: " .. newPlayer.Name)
                 end
             end)
 
-            -- Check players already in the server.
             for _, playerInGame in ipairs(Players:GetPlayers()) do
-                -- Don't check the local player.
                 if playerInGame ~= player then
                     local playerInGameStaffInfo = checkPlayerForStaffRole(playerInGame)
                     if playerInGameStaffInfo and playerInGameStaffInfo.IsStaff then
+                        debugPrint("[Hiep's Script] [StaffWatch] Staff member already in game: " .. playerInGame.Name .. ". Kicking local player.", true)
                         player:Kick("A staff member is already in the game: " .. playerInGame.Name)
                     end
                 end
             end
         else
-            warn("Staff Watch: This is not a group game, so the feature won't run.")
+            debugPrint("[Hiep's Script] [StaffWatch] This is not a group game, so the feature won't run.", true)
         end
     elseif playerAddedConnection then
         playerAddedConnection:Disconnect()
         playerAddedConnection = nil
+        debugPrint("[Hiep's Script] [StaffWatch] Watch disabled and connection disconnected.")
     end
 end)
+
+-- Money Counter
+task.spawn(function()
+    local leaderstats = player:WaitForChild("leaderstats")
+    local cash = leaderstats and leaderstats:WaitForChild("Cash")
+    if cash then
+        initialMoney = cash.Value
+        debugPrint("[Hiep's Script] [MoneyCounter] Initialized. Starting money: " .. formatMoney(initialMoney))
+    else
+        debugPrint("[Hiep's Script] [MoneyCounter] Could not find Cash value on startup.", true)
+    end
+end)
+
+tabFarm:CreateButton("Check Money Gained", function()
+    local leaderstats = player:FindFirstChild("leaderstats")
+    local cash = leaderstats and leaderstats:FindFirstChild("Cash")
+    if cash then
+        local currentMoney = cash.Value
+        local gained = currentMoney - initialMoney
+        debugPrint("[Hiep's Script] [MoneyCounter] Total Money Gained: " .. formatMoney(gained))
+    else
+        debugPrint("[Hiep's Script] [MoneyCounter] Could not find Cash value to check.", true)
+    end
+end)
+
+tabFarm:CreateButton("Reset Money Counter", function()
+    local leaderstats = player:FindFirstChild("leaderstats")
+    local cash = leaderstats and leaderstats:FindFirstChild("Cash")
+    if cash then
+        initialMoney = cash.Value
+        debugPrint("[Hiep's Script] [MoneyCounter] Counter has been reset. New initial money: " .. formatMoney(initialMoney))
+    else
+        debugPrint("[Hiep's Script] [MoneyCounter] Could not find Cash value to reset.", true)
+    end
+end)
+
 tabMisc:CreateButton("Server Hop", function()
+    debugPrint("[Hiep's Script] [Teleport] Attempting to server hop.")
     pcall(function()
         local servers = HttpService:JSONDecode(game:HttpGet(
             "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"));
         for _, srv in pairs(servers.data) do
             if (srv.playing < srv.maxPlayers) then
+                debugPrint("[Hiep's Script] [Teleport] Found a server with space. Teleporting to instance " .. srv.id)
                 TeleportService:TeleportToPlaceInstance(game.PlaceId, srv.id, player);
                 break
             end
@@ -702,16 +891,17 @@ tabMisc:CreateButton("Server Hop", function()
     end);
 end);
 tabMisc:CreateButton("Rejoin", function()
+    debugPrint("[Hiep's Script] [Teleport] Attempting to rejoin the current server.")
     pcall(function()
         TeleportService:Teleport(game.PlaceId, player);
     end);
 end);
 tabMisc:CreateButton("Inf Yield", function()
+    debugPrint("[Hiep's Script] [Misc] Loading Infinite Yield.")
     pcall(function()
         loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))();
     end);
 end);
-
 tabMisc:CreateButton("Unload Script", function()
     win:Destroy()
 end)
@@ -726,6 +916,7 @@ tabCredits:CreateLabel("This script is open source, for everyone to use, not upd
 -- Cleanup Logic
 --==============================================================================
 win:OnDestroy(function()
+    print("[Hiep's Script] [Cleanup] Unloading script and cleaning up connections.")
     -- Disconnect all event connections to prevent memory leaks
     if dashConnection then dashConnection:Disconnect() end
     if antiAfkConnection then antiAfkConnection:Disconnect() end
@@ -734,6 +925,7 @@ win:OnDestroy(function()
     -- Stop any active farm loops
     dropFarm = false
     flyingFarm = false
+    moneyCounterEnabled = false
 
     -- Disable noclip if it's active
     if vehicleNoclip then
@@ -746,4 +938,5 @@ win:OnDestroy(function()
     -- Destroy any GUIs created by the script
     if antiAFKGui then antiAFKGui:Destroy() end
     if visualizationBox then visualizationBox:Destroy() end
+    print("[Hiep's Script] [Cleanup] Script fully unloaded. TYSM for using my script")
 end)

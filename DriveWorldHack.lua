@@ -576,46 +576,46 @@ dropFarmToggle = tabFarm:CreateToggle("Drop Farm", false, function(val)
         if flyingFarmToggle then
             flyingFarmToggle:SetValue(false)
         end
-        debugPrint("[Hiep's Script] [DropFarm] Starting farm monitor and main loop.")
-        task.spawn(function()
-            while dropFarm do
-                task.wait(5)
-                pcall(function()
-                    if isPaused or not dropFarm then return end
-                    local needsRespawn = false
-                    local reason = ""
+        -- debugPrint("[Hiep's Script] [DropFarm] Starting farm monitor and main loop.")
+        -- task.spawn(function()
+        --     while dropFarm do
+        --         task.wait(5)
+        --         pcall(function()
+        --             if isPaused or not dropFarm then return end
+        --             local needsRespawn = false
+        --             local reason = ""
 
-                    local char = player.Character
-                    local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+        --             local char = player.Character
+        --             local humanoid = char and char:FindFirstChildOfClass("Humanoid")
 
-                    if not (humanoid and humanoid.Health > 0) then
-                        needsRespawn = true
-                        reason = "Player is dead or character not found."
-                    else
-                        local currentCar = getCar()
-                        if not (currentCar and currentCar.PrimaryPart) then
-                            needsRespawn = true
-                            reason = "Car not found."
-                        else
-                            local hrp = char:FindFirstChild("HumanoidRootPart")
-                            if hrp then
-                                local dist = (hrp.Position - currentCar.PrimaryPart.Position).Magnitude
-                                if dist > 50 then
-                                    needsRespawn = true
-                                    reason = "Player is too far from car ("..tostring(dist).." studs)."
-                                end
-                            end
-                        end
-                    end
+        --             if not (humanoid and humanoid.Health > 0) then
+        --                 needsRespawn = true
+        --                 reason = "Player is dead or character not found."
+        --             else
+        --                 local currentCar = getCar()
+        --                 if not (currentCar and currentCar.PrimaryPart) then
+        --                     needsRespawn = true
+        --                     reason = "Car not found."
+        --                 else
+        --                     local hrp = char:FindFirstChild("HumanoidRootPart")
+        --                     if hrp then
+        --                         local dist = (hrp.Position - currentCar.PrimaryPart.Position).Magnitude
+        --                         if dist > 50 then
+        --                             needsRespawn = true
+        --                             reason = "Player is too far from car ("..tostring(dist).." studs)."
+        --                         end
+        --                     end
+        --                 end
+        --             end
 
-                    if needsRespawn then
-                        debugPrint("[Hiep's Script] [DropFarm-Monitor] Condition triggered respawn. Reason: " .. reason, true)
-                        respawnCarAtCoord(dropFarmTeleportCoord)
-                        task.wait(5)
-                    end
-                end)
-            end
-        end)
+        --             if needsRespawn then
+        --                 debugPrint("[Hiep's Script] [DropFarm-Monitor] Condition triggered respawn. Reason: " .. reason, true)
+        --                 respawnCarAtCoord(dropFarmTeleportCoord)
+        --                 task.wait(5)
+        --             end
+        --         end)
+        --     end
+        -- end)
 
         task.spawn(uncollideFarmChunks)
         task.spawn(function()
@@ -644,7 +644,7 @@ dropFarmToggle = tabFarm:CreateToggle("Drop Farm", false, function(val)
                             end
                         end
                     end
-                    task.wait(6)
+                    task.wait(8.5) --car drop can be not good
                 end
             end
         end);

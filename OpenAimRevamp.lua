@@ -135,7 +135,7 @@ local function createNametag(character, otherPlayer)
         textLabel.Size = UDim2.new(1, 0, 1, 0)
         textLabel.BackgroundTransparency = 1
         textLabel.Text = otherPlayer.Name
-        textLabel.TextColor3 = otherPlayer.Team and otherPlayer.Team.TeamColor.Color or Color3.new(0.5, 0.5, 0.5)
+        textLabel.TextColor3 = ((otherPlayer.Team and otherPlayer.Team.TeamColor) and otherPlayer.Team.TeamColor.Color) or (_G.EspCustomColor or Color3.new(0.5, 0.5, 0.5))
         textLabel.TextSize = SETTINGS.TEXT_SIZE
         textLabel.Font = SETTINGS.TEXT_FONT
         textLabel.Parent = billboard
@@ -157,7 +157,16 @@ local function createNametag(character, otherPlayer)
             healthLabel.Size = UDim2.new(1, 0, 1, 0) -- Scaled to parent (billboard)
             healthLabel.BackgroundTransparency = 1
             healthLabel.Text = "HP: " .. math.floor(humanoid.Health) .. "/" .. math.floor(humanoid.MaxHealth)
-            healthLabel.TextColor3 = Color3.new(1, 0, 0)
+            local healthPercent = humanoid.Health / humanoid.MaxHealth
+            local healthColor
+            if healthPercent > 0.7 then
+                healthColor = Color3.new(0, 1, 0) -- Green
+            elseif healthPercent > 0.3 then
+                healthColor = Color3.fromRGB(255, 165, 0) -- Orange
+            else
+                healthColor = Color3.new(1, 0, 0) -- Red
+            end
+            healthLabel.TextColor3 = healthColor
             healthLabel.TextSize = SETTINGS.TEXT_SIZE
             healthLabel.Font = SETTINGS.TEXT_FONT
             healthLabel.TextYAlignment = Enum.TextYAlignment.Bottom
@@ -165,6 +174,16 @@ local function createNametag(character, otherPlayer)
 
             humanoid.HealthChanged:Connect(function(health)
                 healthLabel.Text = "HP: " .. math.floor(health) .. "/" .. math.floor(humanoid.MaxHealth)
+                local healthPercent = health / humanoid.MaxHealth
+                local healthColor
+                if healthPercent > 0.7 then
+                    healthColor = Color3.new(0, 1, 0) -- Green
+                elseif healthPercent > 0.3 then
+                    healthColor = Color3.fromRGB(255, 165, 0) -- Orange
+                else
+                    healthColor = Color3.new(1, 0, 0) -- Red
+                end
+                healthLabel.TextColor3 = healthColor
             end)
 
             if SETTINGS.TEXT_OUTLINE then
@@ -187,7 +206,7 @@ local function highlightPlayer(character, otherPlayer)
 
     local highlight = Instance.new("Highlight")
     highlight.Name = generateRandomName()
-    highlight.FillColor = (otherPlayer.Team and otherPlayer.Team.TeamColor) and otherPlayer.Team.TeamColor.Color or Color3.new(0.5, 0.5, 0.5)
+    highlight.FillColor = ((otherPlayer.Team and otherPlayer.Team.TeamColor) and otherPlayer.Team.TeamColor.Color) or (_G.EspCustomColor or Color3.new(0.5, 0.5, 0.5))
     highlight.OutlineColor = Color3.new(0, 0, 0)
     highlight.Parent = character
 
@@ -336,6 +355,7 @@ Configuration.FoVColour = ImportedConfiguration["FoVColour"] or Color3.fromRGB(2
 _G.EspHighlight = ImportedConfiguration["EspHighlight"] or false
 _G.EspName = ImportedConfiguration["EspName"] or false
 _G.EspHealth = ImportedConfiguration["EspHealth"] or false
+_G.EspCustomColor = ImportedConfiguration["EspCustomColor"] or Color3.fromRGB(255, 255, 255)
 
 
 
@@ -1100,6 +1120,20 @@ do
             end
         end)
 
+        EspSection:AddColorpicker("EspCustomColor", {
+            Title = "ESP Color",
+            Description = "Changes the ESP color (used when no team color)",
+            Default = _G.EspCustomColor,
+            Callback = function(Value)
+                _G.EspCustomColor = Value
+                for _, _Player in ipairs(Players:GetPlayers()) do
+                    if _Player ~= Players.LocalPlayer then
+                        updatePlayerESP(_Player)
+                    end
+                end
+            end
+        })
+
         local FoVSection = Tabs.Visuals:AddSection("FoV")
 
         local FoVToggle = FoVSection:AddToggle("FoV", { Title = "FoV", Description = "Graphically Displays the FoV Radius", Default = Configuration.FoV })
@@ -1336,6 +1370,9 @@ do
                             elseif Key == "EspHealth" then
                                 _G.EspHealth = Value
                                 Fluent.Options[Key]:SetValue(Value)
+                            elseif Key == "EspCustomColor" then
+                                _G.EspCustomColor = ColorsHandler:UnpackColour(Value)
+                                Fluent.Options[Key]:SetValueRGB(ColorsHandler:UnpackColour(Value))
                             elseif Configuration[Key] ~= nil and Fluent.Options[Key] then
                                 Configuration[Key] = Value
                             end
@@ -1420,6 +1457,7 @@ do
                     ExportedConfiguration["EspHighlight"] = _G.EspHighlight
                     ExportedConfiguration["EspName"] = _G.EspName
                     ExportedConfiguration["EspHealth"] = _G.EspHealth
+                    ExportedConfiguration["EspCustomColor"] = ColorsHandler:PackColour(_G.EspCustomColor)
                     ExportedConfiguration = HttpService:JSONEncode(ExportedConfiguration)
                     getfenv().writefile(string.format("%s.ttwizz", game.GameId), ExportedConfiguration)
                     Window:Dialog({

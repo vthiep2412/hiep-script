@@ -117,10 +117,6 @@ local function createNametag(character, otherPlayer)
         return
     end
 
-    if not _G.EspName and not _G.EspHealth then
-        return
-    end
-
     local billboard = Instance.new("BillboardGui")
     billboard.Name = generateRandomName()
     billboard.Adornee = head
@@ -129,13 +125,13 @@ local function createNametag(character, otherPlayer)
     billboard.AlwaysOnTop = true
     billboard.Parent = character
 
-    if _G.EspName then
+    if Configuration.EspName then
         local textLabel = Instance.new("TextLabel")
         textLabel.Name = generateRandomName()
         textLabel.Size = UDim2.new(1, 0, 1, 0)
         textLabel.BackgroundTransparency = 1
         textLabel.Text = otherPlayer.Name
-        textLabel.TextColor3 = ((otherPlayer.Team and otherPlayer.Team.TeamColor) and otherPlayer.Team.TeamColor.Color) or (_G.EspCustomColor or Color3.new(0.5, 0.5, 0.5))
+        textLabel.TextColor3 = ((otherPlayer.Team and otherPlayer.Team.TeamColor) and otherPlayer.Team.TeamColor.Color) or (Configuration.EspCustomColor or Color3.new(0.5, 0.5, 0.5))
         textLabel.TextSize = SETTINGS.TEXT_SIZE
         textLabel.Font = SETTINGS.TEXT_FONT
         textLabel.Parent = billboard
@@ -149,7 +145,7 @@ local function createNametag(character, otherPlayer)
         end
     end
 
-    if _G.EspName and _G.EspHealth then
+    if Configuration.EspHealth then
         local humanoid = character:FindFirstChildOfClass("Humanoid")
         local healthLabel = Instance.new("TextLabel")
         if humanoid then
@@ -193,7 +189,6 @@ local function createNametag(character, otherPlayer)
                 outline.Thickness = 1
                 outline.Parent = healthLabel
             end
-        else
         end
     end
 
@@ -202,11 +197,11 @@ end
 
 
 local function highlightPlayer(character, otherPlayer)
-    if not _G.EspHighlight then return end -- Linked to Configuration
+    if not Configuration.EspHighlight then return end -- Linked to Configuration
 
     local highlight = Instance.new("Highlight")
     highlight.Name = generateRandomName()
-    highlight.FillColor = ((otherPlayer.Team and otherPlayer.Team.TeamColor) and otherPlayer.Team.TeamColor.Color) or (_G.EspCustomColor or Color3.new(0.5, 0.5, 0.5))
+    highlight.FillColor = ((otherPlayer.Team and otherPlayer.Team.TeamColor) and otherPlayer.Team.TeamColor.Color) or (Configuration.EspCustomColor or Color3.new(0.5, 0.5, 0.5))
     highlight.OutlineColor = Color3.new(0, 0, 0)
     highlight.Parent = character
 
@@ -227,10 +222,10 @@ local function updatePlayerESP(otherPlayer)
         if not character then return end
 
         -- Create new ESP elements if enabled
-        if _G.EspHighlight then
+        if Configuration.EspHighlight then
             highlightPlayer(character, otherPlayer)
         end
-        if _G.EspName or _G.EspHealth then
+        if Configuration.EspName or Configuration.EspHealth then
             createNametag(character, otherPlayer)
         end
     end)
@@ -352,10 +347,10 @@ Configuration.FoVOpacity = ImportedConfiguration["FoVOpacity"] or 0.8
 Configuration.FoVFilled = ImportedConfiguration["FoVFilled"] or false
 Configuration.FoVColour = ImportedConfiguration["FoVColour"] or Color3.fromRGB(255, 255, 255)
 
-_G.EspHighlight = ImportedConfiguration["EspHighlight"] or false
-_G.EspName = ImportedConfiguration["EspName"] or false
-_G.EspHealth = ImportedConfiguration["EspHealth"] or false
-_G.EspCustomColor = ImportedConfiguration["EspCustomColor"] or Color3.fromRGB(255, 255, 255)
+Configuration.EspHighlight = ImportedConfiguration["EspHighlight"] or false
+Configuration.EspName = ImportedConfiguration["EspName"] or false
+Configuration.EspHealth = ImportedConfiguration["EspHealth"] or false
+Configuration.EspCustomColor = ImportedConfiguration["EspCustomColor"] or Color3.fromRGB(255, 255, 255)
 
 
 
@@ -1081,9 +1076,9 @@ do
 
         local EspSection = Tabs.Visuals:AddSection("ESP")
 
-        local EspHighlightToggle = EspSection:AddToggle("EspHighlight", { Title = "Highlight", Description = "Toggles Player Highlights", Default = _G.EspHighlight })
+        local EspHighlightToggle = EspSection:AddToggle("EspHighlight", { Title = "Highlight", Description = "Toggles Player Highlights", Default = Configuration.EspHighlight })
         EspHighlightToggle:OnChanged(function(Value)
-            _G.EspHighlight = Value
+            Configuration.EspHighlight = Value
             -- Need to update all existing ESP when this changes
             for _, _Player in ipairs(Players:GetPlayers()) do
                 if _Player ~= Players.LocalPlayer then
@@ -1092,9 +1087,9 @@ do
             end
         end)
 
-        local EspNameToggle = EspSection:AddToggle("EspName", { Title = "Name", Description = "Toggles Player Names", Default = _G.EspName })
+        local EspNameToggle = EspSection:AddToggle("EspName", { Title = "Name", Description = "Toggles Player Names", Default = Configuration.EspName })
         EspNameToggle:OnChanged(function(Value)
-            _G.EspName = Value
+            Configuration.EspName = Value
             -- Need to update all existing ESP when this changes
             for _, _Player in ipairs(Players:GetPlayers()) do
                 if _Player ~= Players.LocalPlayer then
@@ -1103,15 +1098,9 @@ do
             end
         end)
 
-        local EspHealthToggle = EspSection:AddToggle("EspHealth", { Title = "Health", Description = "Toggles Player Health", Default = _G.EspHealth })
+        local EspHealthToggle = EspSection:AddToggle("EspHealth", { Title = "Health", Description = "Toggles Player Health", Default = Configuration.EspHealth })
         EspHealthToggle:OnChanged(function(Value)
-            if Value and not _G.EspName then
-                -- If trying to enable health but name is off, don't enable health
-                EspHealthToggle:SetValue(false) -- Visually revert the toggle
-                _G.EspHealth = false
-            else
-                _G.EspHealth = Value
-            end
+            Configuration.EspHealth = Value
             -- Need to update all existing ESP when this changes
             for _, _Player in ipairs(Players:GetPlayers()) do
                 if _Player ~= Players.LocalPlayer then
@@ -1123,9 +1112,9 @@ do
         EspSection:AddColorpicker("EspCustomColor", {
             Title = "ESP Color",
             Description = "Changes the ESP color (used when no team color)",
-            Default = _G.EspCustomColor,
+            Default = Configuration.EspCustomColor,
             Callback = function(Value)
-                _G.EspCustomColor = Value
+                Configuration.EspCustomColor = Value
                 for _, _Player in ipairs(Players:GetPlayers()) do
                     if _Player ~= Players.LocalPlayer then
                         updatePlayerESP(_Player)
@@ -1362,16 +1351,16 @@ do
                             elseif Key == "FoVColour" then
                                 Fluent.Options[Key]:SetValueRGB(ColorsHandler:UnpackColour(Value))
                             elseif Key == "EspHighlight" then
-                                _G.EspHighlight = Value
+                                Configuration.EspHighlight = Value
                                 Fluent.Options[Key]:SetValue(Value)
                             elseif Key == "EspName" then
-                                _G.EspName = Value
+                                Configuration.EspName = Value
                                 Fluent.Options[Key]:SetValue(Value)
                             elseif Key == "EspHealth" then
-                                _G.EspHealth = Value
+                                Configuration.EspHealth = Value
                                 Fluent.Options[Key]:SetValue(Value)
                             elseif Key == "EspCustomColor" then
-                                _G.EspCustomColor = ColorsHandler:UnpackColour(Value)
+                                Configuration.EspCustomColor = ColorsHandler:UnpackColour(Value)
                                 Fluent.Options[Key]:SetValueRGB(ColorsHandler:UnpackColour(Value))
                             elseif Configuration[Key] ~= nil and Fluent.Options[Key] then
                                 Configuration[Key] = Value
@@ -1454,10 +1443,10 @@ do
                             ExportedConfiguration[Key] = Value
                         end
                     end
-                    ExportedConfiguration["EspHighlight"] = _G.EspHighlight
-                    ExportedConfiguration["EspName"] = _G.EspName
-                    ExportedConfiguration["EspHealth"] = _G.EspHealth
-                    ExportedConfiguration["EspCustomColor"] = ColorsHandler:PackColour(_G.EspCustomColor)
+                    ExportedConfiguration["EspHighlight"] = Configuration.EspHighlight
+                    ExportedConfiguration["EspName"] = Configuration.EspName
+                    ExportedConfiguration["EspHealth"] = Configuration.EspHealth
+                    ExportedConfiguration["EspCustomColor"] = ColorsHandler:PackColour(Configuration.EspCustomColor)
                     ExportedConfiguration = HttpService:JSONEncode(ExportedConfiguration)
                     getfenv().writefile(string.format("%s.ttwizz", game.GameId), ExportedConfiguration)
                     Window:Dialog({

@@ -74,7 +74,7 @@ local function flyCarTo(car, startPos, endPos, speed)
         if not (car and car.Parent) then break end -- Stop if car is destroyed
         BV.velocity = direction * speed
         BG.cframe = CFrame.new(root.Position, endPos)
-        elapsed += task.wait()
+        elapsed = elapsed + task.wait()
     end
 
     if BG.Parent then BG:Destroy() end

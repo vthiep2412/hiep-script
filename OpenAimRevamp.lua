@@ -1557,16 +1557,6 @@ do
                     }
                 }
             })
-        elseif ShowWarning then
-            Window:Dialog({
-                Title = "Warning",
-                Content = string.format("Your Software does not support all the Features of %s 🔥FREE🔥!", string.format(MonthlyLabels[os.date("*t").month], "Open Aimbot")),
-                Buttons = {
-                    {
-                        Title = "Confirm"
-                    }
-                }
-            })
         else
         end
     end

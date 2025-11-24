@@ -1,47 +1,3 @@
---! Lag removal for rivals
--- LocalScript
-
--- Utility function to safely remove a folder if it exists
-local function removeFolder(path)
-    if path and path.Parent then
-        path:Destroy()
-        print("Removed:", path:GetFullName())
-    end
-end
-
--- Run once when the player joins
-local Players = game:GetService("Players")
-local StarterPlayer = game:GetService("StarterPlayer")
-local localPlayer = Players.LocalPlayer
-
--- List of folders to remove
-local targets = {
-    StarterPlayer.StarterPlayerScripts:FindFirstChild("Modules") and StarterPlayer.StarterPlayerScripts.Modules:FindFirstChild("ViewModels"),
-    localPlayer.PlayerScripts:FindFirstChild("Modules") and localPlayer.PlayerScripts.Modules:FindFirstChild("ViewModels"),
-    localPlayer.PlayerScripts:FindFirstChild("Assets") and localPlayer.PlayerScripts.Assets:FindFirstChild("ViewModels") and localPlayer.PlayerScripts.Assets.ViewModels:FindFirstChild("Bundles"),
-    StarterPlayer.StarterPlayerScripts:FindFirstChild("Assets") and StarterPlayer.StarterPlayerScripts.Assets:FindFirstChild("ViewModels") and StarterPlayer.StarterPlayerScripts.Assets.ViewModels:FindFirstChild("Bundles"),
-    StarterPlayer.StarterPlayerScripts:FindFirstChild("Assets") and StarterPlayer.StarterPlayerScripts.Assets:FindFirstChild("Misc") and StarterPlayer.StarterPlayerScripts.Assets.Misc:FindFirstChild("MuzzleFlashes"),
-}
-
--- Remove them
-for _, folder in ipairs(targets) do
-    if folder then
-        removeFolder(folder)
-    end
-end
--- Remove shadows
-for _, descendant in pairs(game.Workspace:GetDescendants()) do
-    if descendant:IsA("ShadowMap") then
-        descendant:Destroy()
-    end
-end
--- Remove particle
-for _, descendant in pairs(game.Workspace:GetDescendants()) do
-    if descendant:IsA("ParticleEmitter") then
-        descendant.Enabled = false
-    end
-end
-
 --! Debugger
 
 local DEBUG = false
@@ -62,7 +18,7 @@ end
 --! Services
 
 local HttpService = game:GetService("HttpService")
--- local Players = game:GetService("Players")
+local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")

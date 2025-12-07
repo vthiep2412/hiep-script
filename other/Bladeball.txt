@@ -1,0 +1,399 @@
+--[[
+	WARNING: Heads up! This script has not been verified by ScriptBlox. Use at your own risk!
+]]
+--[[
+    Lyxx Gui ai (Close-Combat Tuning)
+    Author: Gemini | Fine-tuned settings for close-range duels
+    
+    Features:
+    - Parry Spam Mode (Overcomes latency with continuous clicking)
+    - Speed-Sensitive Aggressive Parry Mode
+    - Smart Auto Parry (Predictive AI)
+    - Auto Aim & Walk
+    - Toggle all features via configurable GUI
+]]
+
+-- ===[ A Y A R L A R ]===
+local CONFIG = {
+    -- Automatic Parry Settings
+    ParryDistanceLimit = 35,        -- Base parry distance for aggressive mode (studs)
+    ParryDistanceBaseSpeed = 70,    -- Speed at which the parry distance starts scaling
+    SpamDistanceThreshold = 40,     -- Distance to start spam clicking (studs)
+    ParrySpamInterval = 0.03,       -- Time interval between clicks in spam mode (seconds)
+    ParryCooldown = 0.3,            -- Cooldown after a successful parry (seconds)
+    
+    -- Auto Walk Settings
+    AutoWalkDistance = 15,
+    
+    -- Visual Settings
+    ShowHitboxLine = true,
+    ShowGuiKey = Enum.KeyCode.RightShift
+}
+
+-- ===[ MODULE IMPORTS ]===
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+-- ===[ CORE VARIABLES ]===
+local Player = Players.LocalPlayer
+local connection
+local previousVelocity = nil
+local previousPlayerPosition = nil
+local hitboxLine = nil
+
+-- Toggles for features controlled by the GUI
+local enabled = {
+    Parry = false,
+    AggressiveParry = false,
+    SpamParry = false,
+    Aim = false,
+    Walk = false,
+    Hitbox = true
+}
+
+local debounce = {
+    Parry = false
+}
+
+local isSpamming = false
+local spamTask = nil
+
+-- ===[ HELPER FUNCTIONS ]===
+local function GetBallFromFolder(folder)
+    for _, ball in ipairs(folder:GetChildren()) do
+        if ball:GetAttribute("realBall") then
+            if ball:GetAttribute("parried") == nil then
+                ball:SetAttribute("parried", false)
+            end
+            return ball
+        end
+    end
+    return nil
+end
+
+local function ResetConnection()
+    if connection then
+        connection:Disconnect()
+        connection = nil
+    end
+end
+
+local function UpdateHitboxLine(startPos, endPos)
+    if not hitboxLine then
+        hitboxLine = Instance.new("Part")
+        hitboxLine.Anchored = true
+        hitboxLine.CanCollide = false
+        hitboxLine.Color = Color3.new(1, 0, 0)
+        hitboxLine.Material = Enum.Material.Neon
+        hitboxLine.Transparency = 0.3
+        hitboxLine.Parent = workspace
+    end
+    
+    if enabled.Hitbox then
+        local distance = (startPos - endPos).Magnitude
+        hitboxLine.Size = Vector3.new(0.2, 0.2, distance)
+        hitboxLine.CFrame = CFrame.new(startPos, endPos) * CFrame.new(0, 0, -distance / 2)
+        hitboxLine.Transparency = 0.3
+    else
+        hitboxLine.Transparency = 1
+    end
+end
+
+local function StartSpammingClicks()
+    if isSpamming then return end
+    isSpamming = true
+    spamTask = task.spawn(function()
+        while isSpamming do
+            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+            task.wait(CONFIG.ParrySpamInterval)
+        end
+    end)
+end
+
+local function StopSpammingClicks()
+    if not isSpamming then return end
+    isSpamming = false
+    if spamTask then
+        task.cancel(spamTask)
+        spamTask = nil
+    end
+end
+
+-- ===[ GUI SETUP ]===
+local screenGui
+local function createGui()
+    screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "BladeBallProGUI"
+    screenGui.Parent = CoreGui
+    screenGui.ResetOnSpawn = false
+    screenGui.Enabled = true
+
+    local mainFrame = Instance.new("Frame")
+    mainFrame.Name = "MainFrame"
+    mainFrame.Size = UDim2.new(0, 200, 0, 155)
+    mainFrame.Position = UDim2.new(1, -210, 0.1, 0)
+    mainFrame.BackgroundColor3 = Color3.new(0.15, 0.15, 0.15)
+    mainFrame.BorderSizePixel = 1
+    mainFrame.BorderColor3 = Color3.new(0.05, 0.05, 0.05)
+    mainFrame.Draggable = true
+    mainFrame.Parent = screenGui
+
+    local titleBar = Instance.new("TextLabel")
+    titleBar.Size = UDim2.new(1, 0, 0, 20)
+    titleBar.Position = UDim2.new(0, 0, 0, 0)
+    titleBar.Font = Enum.Font.SourceSansBold
+    titleBar.TextSize = 16
+    titleBar.Text = "Lyxx Gui"
+    titleBar.TextColor3 = Color3.new(1, 1, 1)
+    titleBar.BackgroundColor3 = Color3.new(0.25, 0.25, 0.25)
+    titleBar.Parent = mainFrame
+    
+    local paddingFrame = Instance.new("Frame")
+    paddingFrame.Size = UDim2.new(1, 0, 1, -20)
+    paddingFrame.Position = UDim2.new(0, 0, 0, 20)
+    paddingFrame.BackgroundTransparency = 1
+    paddingFrame.Parent = mainFrame
+
+    local layout = Instance.new("UIListLayout")
+    layout.FillDirection = Enum.FillDirection.Vertical
+    layout.Padding = UDim.new(0, 5)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Parent = paddingFrame
+
+    local function createToggle(name, stateKey)
+        local button = Instance.new("TextButton")
+        button.Name = name .. "Toggle"
+        button.Size = UDim2.new(1, 0, 0, 25)
+        button.Font = Enum.Font.SourceSansBold
+        button.TextSize = 15
+        button.TextColor3 = Color3.new(1, 1, 1)
+        button.BorderSizePixel = 0
+        button.Parent = paddingFrame
+
+        local function updateButton()
+            button.Text = name .. " (" .. (enabled[stateKey] and "ON" or "OFF") .. ")"
+            button.BackgroundColor3 = enabled[stateKey] and Color3.new(0, 0.6, 0) or Color3.new(0.4, 0.4, 0.4)
+        end
+
+        button.MouseButton1Click:Connect(function()
+            enabled[stateKey] = not enabled[stateKey]
+            updateButton()
+        end)
+        
+        updateButton()
+        return button
+    end
+    
+    createToggle("Auto Parry", "Parry")
+    createToggle("Aggressive Parry", "AggressiveParry")
+    createToggle("Parry Spam", "SpamParry")
+    createToggle("Auto Aim", "Aim")
+    createToggle("Auto Walk", "Walk")
+    createToggle("Show Hitbox", "Hitbox")
+
+    print("âœ… GUI created. Press RightShift to toggle visibility.")
+end
+
+-- ===[ EVENT CONNECTIONS ]===
+workspace.Balls.ChildAdded:Connect(function(child)
+    if Player.Character and Player.Character.Parent and Player.Character.Parent.Name == "Alive" then
+        local ball = GetBallFromFolder(workspace.Balls)
+        if not ball then return end
+        ResetConnection()
+        connection = ball:GetAttributeChangedSignal("target"):Connect(function()
+            ball:SetAttribute("parried", false)
+        end)
+    end
+end)
+
+workspace.TrainingBalls.ChildAdded:Connect(function(child)
+    if Player.Character and Player.Character.Parent and Player.Character.Parent.Name ~= "Alive" then
+        local ball = GetBallFromFolder(workspace.TrainingBalls)
+        if not ball then return end
+        ResetConnection()
+        connection = ball:GetAttributeChangedSignal("target"):Connect(function()
+            ball:SetAttribute("parried", false)
+        end)
+    end
+end)
+
+UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
+    if gameProcessedEvent then return end
+    if input.KeyCode == CONFIG.ShowGuiKey then
+        if screenGui then
+            screenGui.Enabled = not screenGui.Enabled
+        end
+    end
+end)
+
+-- ===[ MAIN LOGIC LOOP ]===
+RunService.PreSimulation:Connect(function()
+    local character = Player.Character
+    if not character then
+        StopSpammingClicks()
+        return
+    end
+    local hrp = character:FindFirstChild("HumanoidRootPart")
+    if not hrp then
+        StopSpammingClicks()
+        return
+    end
+    
+    local ballFolder = (character.Parent and character.Parent.Parent and character.Parent.Name == "Alive") and workspace.Balls or workspace.TrainingBalls
+    local ball = GetBallFromFolder(ballFolder)
+    
+    if not ball then
+        UpdateHitboxLine(Vector3.new(), Vector3.new())
+        local bv = hrp:FindFirstChild("AutoMoveVelocity")
+        if bv then bv:Destroy() end
+        StopSpammingClicks()
+        return
+    end
+
+    local distance = (hrp.Position - ball.Position).Magnitude
+    
+    UpdateHitboxLine(hrp.Position, ball.Position)
+    
+    -- Auto Aim
+    if enabled.Aim then
+        hrp.CFrame = CFrame.new(hrp.Position, ball.Position)
+    end
+    
+    -- Auto Walk
+    local humanoid = character:FindFirstChild("Humanoid")
+    if enabled.Walk and humanoid then
+        local bv = hrp:FindFirstChild("AutoMoveVelocity")
+        if distance > CONFIG.AutoWalkDistance then
+            if not bv then
+                bv = Instance.new("BodyVelocity")
+                bv.Name = "AutoMoveVelocity"
+                bv.MaxForce = Vector3.new(1e5, 0, 1e5)
+                bv.P = 1000
+                bv.Parent = hrp
+            end
+            bv.Velocity = (ball.Position - hrp.Position).Unit * (humanoid.WalkSpeed or 16)
+        else
+            if bv then bv:Destroy() end
+        end
+    else
+        local bv = hrp:FindFirstChild("AutoMoveVelocity")
+        if bv then bv:Destroy() end
+    end
+
+    -- Auto Parry Logic
+    local ballTarget = ball:GetAttribute("target")
+    local ballParried = ball:GetAttribute("parried")
+    local currentVelocity = ball.zoomies.VectorVelocity
+    local speed = currentVelocity.Magnitude
+
+    if enabled.Parry and ballTarget == Player.Name and not ballParried and speed > 0 then
+        -- MOD SEÃ‡Ä°MÄ°
+        if enabled.SpamParry then
+            if distance <= CONFIG.SpamDistanceThreshold then
+                StartSpammingClicks()
+            else
+                StopSpammingClicks()
+            end
+        elseif enabled.AggressiveParry then
+            StopSpammingClicks()
+            local adjustedDistanceLimit = CONFIG.ParryDistanceLimit
+            if speed > CONFIG.ParryDistanceBaseSpeed then
+                adjustedDistanceLimit = CONFIG.ParryDistanceLimit * (speed / CONFIG.ParryDistanceBaseSpeed)
+            end
+            
+            if distance <= adjustedDistanceLimit then
+                if not debounce.Parry then
+                    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+                    ball:SetAttribute("parried", true)
+                end
+            end
+        else
+            StopSpammingClicks()
+            -- Normal Predictive AI Mode (Original Code)
+            local curvature = 0
+            if previousVelocity and previousVelocity.Magnitude > 0 then
+                local dot = math.clamp(previousVelocity.Unit:Dot(currentVelocity.Unit), -1, 1)
+                curvature = math.acos(dot)
+            end
+            previousVelocity = currentVelocity
+            
+            local reactionTimeThreshold = (ballFolder == workspace.TrainingBalls) and 0.7 or 0.55
+            if curvature > math.rad(10) then
+                reactionTimeThreshold = reactionTimeThreshold + 0.1
+            end
+
+            local effectiveThreshold = reactionTimeThreshold
+            if ballFolder == workspace.TrainingBalls then
+                if speed < 10 then
+                    local multiplier = math.clamp(10 / speed, 1, 3)
+                    effectiveThreshold = reactionTimeThreshold * multiplier
+                elseif speed >= 10 and speed < 70 then
+                    effectiveThreshold = reactionTimeThreshold * (speed / 70) * 0.8
+                end
+            else
+                if speed >= 20 and speed < 70 then
+                    effectiveThreshold = reactionTimeThreshold * (speed / 70)
+                end
+            end
+            if speed > 100 then
+                effectiveThreshold = effectiveThreshold + ((speed - 100) / 150)
+            end
+            
+            local otherPlayerNearby = false
+            for _, other in ipairs(Players:GetPlayers()) do
+                if other ~= Player and other.Character and other.Character:FindFirstChild("HumanoidRootPart") then
+                    local otherHrp = other.Character.HumanoidRootPart
+                    if (hrp.Position - otherHrp.Position).Magnitude < 20 then
+                        otherPlayerNearby = true
+                        break
+                    end
+                end
+            end
+            if otherPlayerNearby then
+                effectiveThreshold = effectiveThreshold + 0.2
+            end
+
+            local direction = (ball.Position - hrp.Position).Unit
+            local ballApproachSpeed = currentVelocity:Dot(direction)
+            local playerApproachSpeed = hrp.Velocity:Dot(direction)
+            local relativeSpeed = ballApproachSpeed - playerApproachSpeed
+            if relativeSpeed <= 0 then
+                relativeSpeed = currentVelocity.Magnitude
+            end
+            local predictedTime = distance / relativeSpeed
+            
+            local TELEPORT_THRESHOLD = 50
+            local TELEPORT_DISTANCE_THRESHOLD = 15
+            if previousPlayerPosition then
+                local displacement = (hrp.Position - previousPlayerPosition).Magnitude
+                if displacement > TELEPORT_THRESHOLD and distance < TELEPORT_DISTANCE_THRESHOLD then
+                    if ballTarget == Player.Name and not ballParried then
+                        VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+                        ball:SetAttribute("parried", true)
+                    end
+                end
+            end
+            
+            if ballTarget == Player.Name and not ballParried and speed > 0 and distance <= 50 then
+                if predictedTime <= effectiveThreshold then
+                    if not debounce.Parry then
+                        VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+                        ball:SetAttribute("parried", true)
+                    end
+                end
+            end
+        end
+    else
+        StopSpammingClicks()
+    end
+    
+    previousPlayerPosition = hrp.Position
+end)
+
+-- Initialize GUI
+createGui()
+print("Thankyou For Using Script by Lyxx! Try the new Parry Spam mode.")

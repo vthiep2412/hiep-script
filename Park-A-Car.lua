@@ -16,7 +16,7 @@ local function runCleaner()
 	-- CHECK A: Inside "Stages" folder
 	for _, object in pairs(stagesFolder:GetDescendants()) do
 		if object.Parent then 
-			if object.Name == "OBSTACLES" or object.Name == "obstacles" or object.Name == "Obstacle" then
+			if object.Name == "OBSTACLES" or object.Name == "obstacles" or object.Name == "Obstacle" or object.Name == "Humps" then
 				object:Destroy()
 			end
 		end

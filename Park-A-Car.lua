@@ -43,7 +43,7 @@ task.spawn(function()
 		if isDestroying then
 			-- TASK A: Clean inside "Stages" (OBSTACLES / obstacles)
 			for _, object in pairs(stagesFolder:GetDescendants()) do
-				if object.Name == "OBSTACLES" or object.Name == "obstacles" then
+				if object.Name == "OBSTACLES" or object.Name == "Obstacles" then
 					object:Destroy()
 				end
 			end

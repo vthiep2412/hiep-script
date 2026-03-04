@@ -7,12 +7,12 @@
     add debug and reformat debuging, add respawn for drop farm just in case,
     fix code issue and syntax
 - Test/support executor:
-    velocity: Kindoff supported (usually crash)
-    solara: All supported
-    xeno: All supported
-    - Not tested executor:
+    velocity: fully support
+    solara: it support some
+    xeno: it support some
+- Not tested executor:
     volcano: not test but still good in my opinion
-    jjsploit: balls
+    jjsploit: balded
     ronix: malware
     drift: malware?
     lx63: lot of issue, error, crash but high unc and level
@@ -85,6 +85,10 @@ local flyaroundTeleportCoord = Vector3.new(4100, 80, -5100) -- <<< CHANGE THIS: 
 local dropFarmTeleportCoord = Vector3.new(4900, 80, -5100)
 local flyaroundDuration = 20 -- Duration in minutes for the fly around cycle
 local dropFarmDuration = 20
+
+-- Noclip state (declared here so toggleNoclip and the cleanup handler share the same locals)
+local vehicleNoclip = false
+local originalCollisions = {}
 
 -- Holds connections to events to be disconnected later
 local dashConnection = nil
@@ -232,7 +236,7 @@ end
 
 -- Intercepts the Roblox idle kick message and simulates input to prevent it.
 local function initAntiAFK()
-    antiAfkConnection = Players.LocalPlayer.Idled:connect(function()
+    antiAfkConnection = Players.LocalPlayer.Idled:Connect(function()
         debugPrint("[Hiep's Script] [Anti-AFK] Idle detected, preventing kick.")
         VirtualUser:CaptureController()
         VirtualUser:ClickButton2(Vector2.new())
@@ -372,9 +376,19 @@ local function TptoVector(targetpos)
     car:SetPrimaryPartCFrame(CFrame.new(targetpos))
     task.wait(1)
     debugPrint("[Hiep's Script] [Teleport] Car teleported successfully. Pos TPed: "..tostring(targetpos))
+    return true
 end
 
 -- Enables or disables noclip for the player and their vehicle.
+-- Cache the character outside of Heartbeat to avoid blocking the frame with :Wait()
+local cachedCharacter = player.Character
+player.CharacterAdded:Connect(function(char)
+    cachedCharacter = char
+end)
+player.CharacterRemoving:Connect(function()
+    cachedCharacter = nil
+end)
+
 local function toggleNoclip(val)
     vehicleNoclip = val
     debugPrint("[Hiep's Script] [Noclip] Toggled to: " .. tostring(val))
@@ -382,7 +396,10 @@ local function toggleNoclip(val)
         originalCollisions = {}
         local conn = RunService.Heartbeat:Connect(function()
             pcall(function()
-                local character = player.Character or player.CharacterAdded:Wait()
+                -- Use the non-blocking cached character instead of :Wait()
+                local character = cachedCharacter
+                if not character then return end
+
                 local function processPart(part)
                     if part:IsA("BasePart") then
                         if originalCollisions[part] == nil then
@@ -395,7 +412,7 @@ local function toggleNoclip(val)
                 for _, part in ipairs(character:GetDescendants()) do
                     processPart(part)
                 end
-                
+
                 local car = getCar()
                 if car then
                     for _, part in ipairs(car:GetDescendants()) do
@@ -418,7 +435,7 @@ local function toggleNoclip(val)
                 end
             end
         end)
-        
+
         originalCollisions = {}
         debugPrint("[Hiep's Script] [Noclip] Restored original collisions.")
     end
@@ -452,11 +469,8 @@ local function respawnCarAtCoord(coord)
         
         local playerCFrame = hrp.CFrame
         debugPrint("[Hiep's Script] [Respawn] Invoking server to spawn car at CFrame: " .. tostring(playerCFrame))
-        local args = {
-            CarModel,
-            [3] = playerCFrame
-        }
-        ReplicatedStorage:WaitForChild("Systems"):WaitForChild("CarInteraction"):WaitForChild("SpawnPlayerCar"):InvokeServer(unpack(args))
+        -- Pass arguments directly to avoid the sparse-table / unpack length truncation bug
+        ReplicatedStorage:WaitForChild("Systems"):WaitForChild("CarInteraction"):WaitForChild("SpawnPlayerCar"):InvokeServer(CarModel, nil, playerCFrame)
         task.wait(1)
         
         local newCar = getCar()
@@ -511,7 +525,7 @@ local function flyCarTo(car, startPos, endPos, speed)
 end
 
 -- Applies a forward velocity to the player's car.
-function dash(dashPower, dirhehe)
+local function dash(dashPower, dirhehe)
     local char = player.Character or player.CharacterAdded:Wait();
     if (char and char:FindFirstChild("Head")) then
         local velocity = dirhehe * defaultGravity * dashPower;
@@ -843,13 +857,18 @@ end)
 
 -- Money Counter
 task.spawn(function()
-    local leaderstats = player:WaitForChild("leaderstats")
-    local cash = leaderstats and leaderstats:WaitForChild("Cash")
+    -- Use timeouts to avoid infinite yields if leaderstats/Cash never appear
+    local leaderstats = player:WaitForChild("leaderstats", 10)
+    if not leaderstats then
+        debugPrint("[Hiep's Script] [MoneyCounter] Timed out waiting for leaderstats. Money counter unavailable.", true)
+        return
+    end
+    local cash = leaderstats:WaitForChild("Cash", 10)
     if cash then
         initialMoney = cash.Value
         debugPrint("[Hiep's Script] [MoneyCounter] Initialized. Starting money: " .. formatMoney(initialMoney))
     else
-        debugPrint("[Hiep's Script] [MoneyCounter] Could not find Cash value on startup.", true)
+        debugPrint("[Hiep's Script] [MoneyCounter] Timed out waiting for Cash value. Money counter unavailable.", true)
     end
 end)
 

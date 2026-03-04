@@ -15,6 +15,14 @@ if DEBUG then
 end
 
 
+--! Game Ready Guard
+
+if not game:IsLoaded() then
+    game.Loaded:Wait()
+end
+task.wait(1)
+
+
 --! Services
 
 local HttpService = game:GetService("HttpService")
@@ -43,8 +51,8 @@ local InterfaceManager = {}
 
 function InterfaceManager:ImportSettings()
     pcall(function()
-        if not DEBUG and getfenv().isfile and getfenv().readfile and getfenv().isfile("UISettings.ttwizz") and getfenv().readfile("UISettings.ttwizz") then
-            for Key, Value in next, HttpService:JSONDecode(getfenv().readfile("UISettings.ttwizz")) do
+        if not DEBUG and getfenv().isfile and getfenv().readfile and getfenv().isfile("UISettings.Hiep") and getfenv().readfile("UISettings.Hiep") then
+            for Key, Value in next, HttpService:JSONDecode(getfenv().readfile("UISettings.Hiep")) do
                 UISettings[Key] = Value
             end
         end
@@ -54,7 +62,7 @@ end
 function InterfaceManager:ExportSettings()
     pcall(function()
         if not DEBUG and getfenv().isfile and getfenv().readfile and getfenv().writefile then
-            getfenv().writefile("UISettings.ttwizz", HttpService:JSONEncode(UISettings))
+            getfenv().writefile("UISettings.Hiep", HttpService:JSONEncode(UISettings))
         end
     end)
 end
@@ -266,8 +274,8 @@ end
 local ImportedConfiguration = {}
 
 pcall(function()
-    if not DEBUG and getfenv().isfile and getfenv().readfile and getfenv().isfile(string.format("%s.ttwizz", game.GameId)) and getfenv().readfile(string.format("%s.ttwizz", game.GameId)) and UISettings.AutoImport then
-        ImportedConfiguration = HttpService:JSONDecode(getfenv().readfile(string.format("%s.ttwizz", game.GameId)))
+    if not DEBUG and getfenv().isfile and getfenv().readfile and getfenv().isfile(string.format("%s.Hiep", game.GameId)) and getfenv().readfile(string.format("%s.Hiep", game.GameId)) and UISettings.AutoImport then
+        ImportedConfiguration = HttpService:JSONDecode(getfenv().readfile(string.format("%s.Hiep", game.GameId)))
         for Key, Value in next, ImportedConfiguration do
             if Key == "FoVColour" then
                 ImportedConfiguration[Key] = ColorsHandler:UnpackColour(Value)
@@ -389,6 +397,16 @@ end
 
 --! Fields
 
+-- Cache executor environment lookups so getfenv() is never called in hot paths
+local _env = getfenv()
+local _Drawing       = _env.Drawing
+local _mousemoverel  = _env.mousemoverel
+local _mouse1click   = _env.mouse1click
+local _hookmetamethod   = _env.hookmetamethod
+local _newcclosure      = _env.newcclosure
+local _checkcaller      = _env.checkcaller
+local _getnamecallmethod = _env.getnamecallmethod
+
 local Status = ""
 
 local Fluent = nil
@@ -429,7 +447,7 @@ end
 local SensitivityChanged; SensitivityChanged = UserInputService:GetPropertyChangedSignal("MouseDeltaSensitivity"):Connect(function()
     if not Fluent then
         SensitivityChanged:Disconnect()
-    elseif not Aiming or not DEBUG and (getfenv().mousemoverel and IsComputer and Configuration.AimMode == "Mouse" or getfenv().hookmetamethod and getfenv().newcclosure and getfenv().checkcaller and getfenv().getnamecallmethod and Configuration.AimMode == "Silent") then
+    elseif not Aiming or not DEBUG and (_mousemoverel and IsComputer and Configuration.AimMode == "Mouse" or _hookmetamethod and _newcclosure and _checkcaller and _getnamecallmethod and Configuration.AimMode == "Silent") then
         MouseSensitivity = UserInputService.MouseDeltaSensitivity
     end
 end)
@@ -1336,8 +1354,8 @@ do
             Description = "Loads the Game Configuration File",
             Callback = function()
                 xpcall(function()
-                    if getfenv().isfile(string.format("%s.ttwizz", game.GameId)) and getfenv().readfile(string.format("%s.ttwizz", game.GameId)) then
-                        local ImportedConfiguration = HttpService:JSONDecode(getfenv().readfile(string.format("%s.ttwizz", game.GameId)))
+                    if getfenv().isfile(string.format("%s.Hiep", game.GameId)) and getfenv().readfile(string.format("%s.Hiep", game.GameId)) then
+                        local ImportedConfiguration = HttpService:JSONDecode(getfenv().readfile(string.format("%s.Hiep", game.GameId)))
                         for Key, Value in next, ImportedConfiguration do
                             if Key == "AimKey" or Key == "TriggerKey" or Key == "FoVKey" then
                                 Fluent.Options[Key]:SetValue(Value)
@@ -1389,7 +1407,7 @@ do
                         end
                         Window:Dialog({
                             Title = "Configuration Manager",
-                            Content = string.format("Configuration File %s.ttwizz has been successfully loaded!", game.GameId),
+                            Content = string.format("Configuration File %s.Hiep has been successfully loaded!", game.GameId),
                             Buttons = {
                                 {
                                     Title = "Confirm"
@@ -1399,7 +1417,7 @@ do
                     else
                         Window:Dialog({
                             Title = "Configuration Manager",
-                            Content = string.format("Configuration File %s.ttwizz could not be found!", game.GameId),
+                            Content = string.format("Configuration File %s.Hiep could not be found!", game.GameId),
                             Buttons = {
                                 {
                                     Title = "Confirm"
@@ -1410,7 +1428,7 @@ do
                 end, function()
                     Window:Dialog({
                         Title = "Configuration Manager",
-                        Content = string.format("An Error occurred when loading the Configuration File %s.ttwizz", game.GameId),
+                        Content = string.format("An Error occurred when loading the Configuration File %s.Hiep", game.GameId),
                         Buttons = {
                             {
                                 Title = "Confirm"
@@ -1440,10 +1458,10 @@ do
                     ExportedConfiguration["EspName"] = _G.EspName
                     ExportedConfiguration["EspHealth"] = _G.EspHealth
                     ExportedConfiguration = HttpService:JSONEncode(ExportedConfiguration)
-                    getfenv().writefile(string.format("%s.ttwizz", game.GameId), ExportedConfiguration)
+                    getfenv().writefile(string.format("%s.Hiep", game.GameId), ExportedConfiguration)
                     Window:Dialog({
                         Title = "Configuration Manager",
-                        Content = string.format("Configuration File %s.ttwizz has been successfully overwritten!", game.GameId),
+                        Content = string.format("Configuration File %s.Hiep has been successfully overwritten!", game.GameId),
                         Buttons = {
                             {
                                 Title = "Confirm"
@@ -1453,7 +1471,7 @@ do
                 end, function()
                     Window:Dialog({
                         Title = "Configuration Manager",
-                        Content = string.format("An Error occurred when overwriting the Configuration File %s.ttwizz", game.GameId),
+                        Content = string.format("An Error occurred when overwriting the Configuration File %s.Hiep", game.GameId),
                         Buttons = {
                             {
                                 Title = "Confirm"
@@ -1468,11 +1486,11 @@ do
             Title = "Delete Configuration File",
             Description = "Removes the Game Configuration File",
             Callback = function()
-                if getfenv().isfile(string.format("%s.ttwizz", game.GameId)) then
-                    getfenv().delfile(string.format("%s.ttwizz", game.GameId))
+                if getfenv().isfile(string.format("%s.Hiep", game.GameId)) then
+                    getfenv().delfile(string.format("%s.Hiep", game.GameId))
                     Window:Dialog({
                         Title = "Configuration Manager",
-                        Content = string.format("Configuration File %s.ttwizz has been successfully removed!", game.GameId),
+                        Content = string.format("Configuration File %s.Hiep has been successfully removed!", game.GameId),
                         Buttons = {
                             {
                                 Title = "Confirm"
@@ -1482,7 +1500,7 @@ do
                 else
                     Window:Dialog({
                         Title = "Configuration Manager",
-                        Content = string.format("Configuration File %s.ttwizz could not be found!", game.GameId),
+                        Content = string.format("Configuration File %s.Hiep could not be found!", game.GameId),
                         Buttons = {
                             {
                                 Title = "Confirm"
@@ -1797,43 +1815,53 @@ end
 
 do
     if not DEBUG and getfenv().hookmetamethod and getfenv().newcclosure and getfenv().checkcaller and getfenv().getnamecallmethod then
-        local OldIndex; OldIndex = getfenv().hookmetamethod(game, "__index", getfenv().newcclosure(function(self, Index)
-            if Fluent and not getfenv().checkcaller() and Configuration.AimMode == "Silent" and table.find(Configuration.SilentAimMethods, "Mouse.Hit / Mouse.Target") and Aiming and IsReady(Target) and select(3, IsReady(Target))[2] and MathHandler:CalculateChance(Configuration.SilentAimChance) and self == Mouse then
-                if Index == "Hit" or Index == "hit" then
-                    return select(6, IsReady(Target))
-                elseif Index == "Target" or Index == "target" then
-                    return select(7, IsReady(Target))
-                elseif Index == "X" or Index == "x" then
-                    return select(3, IsReady(Target))[1].X
-                elseif Index == "Y" or Index == "y" then
-                    return select(3, IsReady(Target))[1].Y
-                elseif Index == "UnitRay" or Index == "unitRay" then
-                    return Ray.new(self.Origin, (select(6, IsReady(Target)) - self.Origin).Unit)
+        local OldIndex; OldIndex = _hookmetamethod(game, "__index", _newcclosure(function(self, Index)
+            if Fluent and not _checkcaller() and Configuration.AimMode == "Silent" and table.find(Configuration.SilentAimMethods, "Mouse.Hit / Mouse.Target") and Aiming and self == Mouse then
+                local ready, _, vp, _, _, cf, part = IsReady(Target)
+                if ready and vp[2] and MathHandler:CalculateChance(Configuration.SilentAimChance) then
+                    if Index == "Hit" or Index == "hit" then
+                        return cf
+                    elseif Index == "Target" or Index == "target" then
+                        return part
+                    elseif Index == "X" or Index == "x" then
+                        return vp[1].X
+                    elseif Index == "Y" or Index == "y" then
+                        return vp[1].Y
+                    elseif Index == "UnitRay" or Index == "unitRay" then
+                        return Ray.new(self.Origin, (cf.Position - self.Origin).Unit)
+                    end
                 end
             end
             return OldIndex(self, Index)
         end))
 
-        local OldNameCall; OldNameCall = getfenv().hookmetamethod(game, "__namecall", getfenv().newcclosure(function(...)
-            local Method = getfenv().getnamecallmethod()
+        local OldNameCall; OldNameCall = _hookmetamethod(game, "__namecall", _newcclosure(function(...)
+            -- Fast exit: skip all checks if conditions will never be met
+            if not Fluent or _checkcaller() or Configuration.AimMode ~= "Silent" or not Aiming then
+                return OldNameCall(...)
+            end
+            -- Cache IsReady once for this call
+            local ready, _, vp, wp, mag = IsReady(Target)
+            if not ready or not vp[2] or not MathHandler:CalculateChance(Configuration.SilentAimChance) then
+                return OldNameCall(...)
+            end
+            local Method = _getnamecallmethod()
             local Arguments = { ... }
             local self = Arguments[1]
-            if Fluent and not getfenv().checkcaller() and Configuration.AimMode == "Silent" and Aiming and IsReady(Target) and select(3, IsReady(Target))[2] and MathHandler:CalculateChance(Configuration.SilentAimChance) then
-                if table.find(Configuration.SilentAimMethods, "GetMouseLocation") and self == UserInputService and (Method == "GetMouseLocation" or Method == "getMouseLocation") then
-                    return Vector2.new(select(3, IsReady(Target))[1].X, select(3, IsReady(Target))[1].Y)
-                elseif table.find(Configuration.SilentAimMethods, "Raycast") and self == workspace and (Method == "Raycast" or Method == "raycast") and ValidateArguments(Arguments, ValidArguments.Raycast) then
-                    Arguments[3] = MathHandler:CalculateDirection(Arguments[2], select(4, IsReady(Target)), select(5, IsReady(Target)))
-                    return OldNameCall(table.unpack(Arguments))
-                elseif table.find(Configuration.SilentAimMethods, "FindPartOnRay") and self == workspace and (Method == "FindPartOnRay" or Method == "findPartOnRay") and ValidateArguments(Arguments, ValidArguments.FindPartOnRay) then
-                    Arguments[2] = Ray.new(Arguments[2].Origin, MathHandler:CalculateDirection(Arguments[2].Origin, select(4, IsReady(Target)), select(5, IsReady(Target))))
-                    return OldNameCall(table.unpack(Arguments))
-                elseif table.find(Configuration.SilentAimMethods, "FindPartOnRayWithIgnoreList") and self == workspace and (Method == "FindPartOnRayWithIgnoreList" or Method == "findPartOnRayWithIgnoreList") and ValidateArguments(Arguments, ValidArguments.FindPartOnRayWithIgnoreList) then
-                    Arguments[2] = Ray.new(Arguments[2].Origin, MathHandler:CalculateDirection(Arguments[2].Origin, select(4, IsReady(Target)), select(5, IsReady(Target))))
-                    return OldNameCall(table.unpack(Arguments))
-                elseif table.find(Configuration.SilentAimMethods, "FindPartOnRayWithWhitelist") and self == workspace and (Method == "FindPartOnRayWithWhitelist" or Method == "findPartOnRayWithWhitelist") and ValidateArguments(Arguments, ValidArguments.FindPartOnRayWithWhitelist) then
-                    Arguments[2] = Ray.new(Arguments[2].Origin, MathHandler:CalculateDirection(Arguments[2].Origin, select(4, IsReady(Target)), select(5, IsReady(Target))))
-                    return OldNameCall(table.unpack(Arguments))
-                end
+            if table.find(Configuration.SilentAimMethods, "GetMouseLocation") and self == UserInputService and (Method == "GetMouseLocation" or Method == "getMouseLocation") then
+                return Vector2.new(vp[1].X, vp[1].Y)
+            elseif table.find(Configuration.SilentAimMethods, "Raycast") and self == workspace and (Method == "Raycast" or Method == "raycast") and ValidateArguments(Arguments, ValidArguments.Raycast) then
+                Arguments[3] = MathHandler:CalculateDirection(Arguments[2], wp, mag)
+                return OldNameCall(table.unpack(Arguments))
+            elseif table.find(Configuration.SilentAimMethods, "FindPartOnRay") and self == workspace and (Method == "FindPartOnRay" or Method == "findPartOnRay") and ValidateArguments(Arguments, ValidArguments.FindPartOnRay) then
+                Arguments[2] = Ray.new(Arguments[2].Origin, MathHandler:CalculateDirection(Arguments[2].Origin, wp, mag))
+                return OldNameCall(table.unpack(Arguments))
+            elseif table.find(Configuration.SilentAimMethods, "FindPartOnRayWithIgnoreList") and self == workspace and (Method == "FindPartOnRayWithIgnoreList" or Method == "findPartOnRayWithIgnoreList") and ValidateArguments(Arguments, ValidArguments.FindPartOnRayWithIgnoreList) then
+                Arguments[2] = Ray.new(Arguments[2].Origin, MathHandler:CalculateDirection(Arguments[2].Origin, wp, mag))
+                return OldNameCall(table.unpack(Arguments))
+            elseif table.find(Configuration.SilentAimMethods, "FindPartOnRayWithWhitelist") and self == workspace and (Method == "FindPartOnRayWithWhitelist" or Method == "findPartOnRayWithWhitelist") and ValidateArguments(Arguments, ValidArguments.FindPartOnRayWithWhitelist) then
+                Arguments[2] = Ray.new(Arguments[2].Origin, MathHandler:CalculateDirection(Arguments[2].Origin, wp, mag))
+                return OldNameCall(table.unpack(Arguments))
             end
             return OldNameCall(...)
         end))
@@ -1844,8 +1872,8 @@ end
 --! Bots Handler
 
 local function HandleBots()
-    if not DEBUG and getfenv().mouse1click and IsComputer and Triggering and (Configuration.SmartTriggerBot and Aiming or not Configuration.SmartTriggerBot) and Mouse.Target and IsReady(Mouse.Target:FindFirstAncestorWhichIsA("Model")) and MathHandler:CalculateChance(Configuration.TriggerBotChance) then
-        getfenv().mouse1click()
+    if not DEBUG and _mouse1click and IsComputer and Triggering and (Configuration.SmartTriggerBot and Aiming or not Configuration.SmartTriggerBot) and Mouse.Target and IsReady(Mouse.Target:FindFirstAncestorWhichIsA("Model")) and MathHandler:CalculateChance(Configuration.TriggerBotChance) then
+        _mouse1click()
     end
 end
 
@@ -1867,9 +1895,9 @@ end
 local VisualsHandler = {}
 
 function VisualsHandler:Visualize(Object)
-    if not DEBUG and Fluent and getfenv().Drawing and getfenv().Drawing.new and typeof(Object) == "string" then
+    if not DEBUG and Fluent and _Drawing and _Drawing.new and typeof(Object) == "string" then
         if string.lower(Object) == "fov" then
-            local FoV = getfenv().Drawing.new("Circle")
+            local FoV = _Drawing.new("Circle")
             FoV.Visible = false
             FoV.ZIndex = 4
             FoV.NumSides = 1000
@@ -1992,7 +2020,7 @@ local AimbotLoop; AimbotLoop = RunService[UISettings.RenderingMode]:Connect(func
     if RobloxActive then
         HandleBots()
         HandleRandomParts()
-        if not DEBUG and getfenv().Drawing and getfenv().Drawing.new then
+        if not DEBUG and _Drawing and _Drawing.new then
             VisualsHandler:VisualizeFoV()
             VisualsHandler:RainbowVisuals()
         end
@@ -2017,12 +2045,12 @@ local AimbotLoop; AimbotLoop = RunService[UISettings.RenderingMode]:Connect(func
             end
             local IsTargetReady, _, PartViewportPosition, PartWorldPosition = IsReady(Target)
             if IsTargetReady then
-                if not DEBUG and getfenv().mousemoverel and IsComputer and Configuration.AimMode == "Mouse" then
+                if not DEBUG and _mousemoverel and IsComputer and Configuration.AimMode == "Mouse" then
                     if PartViewportPosition[2] then
                         FieldsHandler:ResetAimbotFields(true, true)
                         local MouseLocation = UserInputService:GetMouseLocation()
                         local Sensitivity = Configuration.UseSensitivity and Configuration.Sensitivity / 5 or 10
-                        getfenv().mousemoverel((PartViewportPosition[1].X - MouseLocation.X) / Sensitivity, (PartViewportPosition[1].Y - MouseLocation.Y) / Sensitivity)
+                        _mousemoverel((PartViewportPosition[1].X - MouseLocation.X) / Sensitivity, (PartViewportPosition[1].Y - MouseLocation.Y) / Sensitivity)
                     else
                         FieldsHandler:ResetAimbotFields(true)
                     end
@@ -2034,7 +2062,7 @@ local AimbotLoop; AimbotLoop = RunService[UISettings.RenderingMode]:Connect(func
                     else
                         workspace.CurrentCamera.CFrame = CFrame.new(workspace.CurrentCamera.CFrame.Position, PartWorldPosition)
                     end
-                elseif not DEBUG and getfenv().hookmetamethod and getfenv().newcclosure and getfenv().checkcaller and getfenv().getnamecallmethod and Configuration.AimMode == "Silent" then
+                elseif not DEBUG and _hookmetamethod and _newcclosure and _checkcaller and _getnamecallmethod and Configuration.AimMode == "Silent" then
                     FieldsHandler:ResetAimbotFields(true, true)
                 end
             else

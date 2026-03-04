@@ -1814,6 +1814,10 @@ end
 --! Silent Aim Handler
 
 do
+    -- Defer hook installation to the next task-scheduler cycle.
+    -- This prevents a race condition crash where hookmetamethod is called
+    -- while the game's own scripts are already mid-call on __index/__namecall.
+    task.defer(function()
     if not DEBUG and getfenv().hookmetamethod and getfenv().newcclosure and getfenv().checkcaller and getfenv().getnamecallmethod then
         local OldIndex; OldIndex = _hookmetamethod(game, "__index", _newcclosure(function(self, Index)
             if Fluent and not _checkcaller() and Configuration.AimMode == "Silent" and table.find(Configuration.SilentAimMethods, "Mouse.Hit / Mouse.Target") and Aiming and self == Mouse then
@@ -1866,6 +1870,7 @@ do
             return OldNameCall(...)
         end))
     end
+    end) -- task.defer
 end
 
 
